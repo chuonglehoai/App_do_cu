@@ -1,8 +1,12 @@
+import 'package:app_do_cu/UserProvider.dart';
+import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart'; // Import Firebase Auth
+import 'package:provider/provider.dart';
 import 'register_screen.dart';
 import 'home_screen.dart'; // Import trang chủ của bạn
+import 'package:app_do_cu/showError.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -25,42 +29,57 @@ class _LoginScreenState extends State<LoginScreen> {
     final password = _passwordController.text;
 
     if (email.isEmpty || password.isEmpty) {
-      _showError('Vui lòng nhập đầy đủ email và mật khẩu');
+      context.showError('Vui lòng nhập đầy đủ email và mật khẩu');
       return;
     }
 
     setState(() => _isLoading = true);
 
     try {
-      // Firebase Auth sẽ tự so sánh email/password với dữ liệu nó quản lý
-      await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
+      DatabaseReference usersRef = FirebaseDatabase.instance.ref("users");
 
-      // Nếu đúng, chuyển sang trang Home
-      if (!mounted) return;
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const HomeScreen()),
-      );
+      DataSnapshot snapshot = await usersRef
+          .orderByChild("email")
+          .equalTo(email)
+          .get()
+          .timeout(const Duration(seconds: 10));
+
+      if (!snapshot.exists) {
+        context.showError('Email này không tồn tại trong hệ thống');
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      // 4. Xử lý dữ liệu trả về (Firebase luôn trả về một Map khi dùng Query)
+      // Cấu trúc: { "user_id_123": { "email": "...", "password": "..." } }
+      final usersMap = Map<dynamic, dynamic>.from(snapshot.value as Map);
       
-    } on FirebaseAuthException catch (e) {
-      String message = 'Đã có lỗi xảy ra';
-      if (e.code == 'user-not-found') message = 'Không tìm thấy tài khoản này';
-      else if (e.code == 'wrong-password') message = 'Mật khẩu không chính xác';
-      else if (e.code == 'invalid-email') message = 'Định dạng email không hợp lệ';
-      
-      _showError(message);
+      // Lấy thông tin của người dùng đầu tiên tìm thấy
+      final userData = usersMap.values.first;
+
+      if (userData['password'].toString() == password) {
+        // ĐĂNG NHẬP THÀNH CÔNG
+        if (!mounted) return;
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Đăng nhập thành công!'), backgroundColor: Colors.green),
+        );
+        Provider.of<UserProvider>(context, listen: false).setUserId(usersMap.keys.first.toString()); // Lưu userId vào Provider
+        // Chuyển sang màn hình Home
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const HomeScreen()),
+        );
+      } else {
+        // SAI MẬT KHẨU
+        context.showError('Mật khẩu không chính xác. Vui lòng thử lại');
+      }
+
+    } catch (e) {
+      context.showError('Lỗi kết nối: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
-  }
-
-  void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Colors.red),
-    );
   }
 
   @override
@@ -170,7 +189,6 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // --- Giữ nguyên các Widget Helpers bên dưới của bạn ---
   Widget _buildInputLabel(String label) {
     return Align(
       alignment: Alignment.centerLeft,
@@ -209,10 +227,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Widget _buildTopAppBar() {
     return Padding(
-      padding: const EdgeInsets.all(16.0),
+      padding: const EdgeInsets.only(top: 60.0, left: 16.0, right: 16.0, bottom: 16.0),
       child: Row(
         children: [
-          const Icon(Icons.arrow_back_ios, size: 20, color: Color(0xFF111418)),
           Expanded(child: Text('Hệ Thống Trao Đổi', textAlign: TextAlign.center, style: GoogleFonts.lexend(fontSize: 18, fontWeight: FontWeight.bold, color: const Color(0xFF111418)))),
           const SizedBox(width: 20),
         ],

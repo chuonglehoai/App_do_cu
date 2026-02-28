@@ -5,6 +5,8 @@ import 'package:google_fonts/google_fonts.dart';
 import '../widgets/search_bar_widget.dart';
 import '../widgets/category_item.dart';
 import '../widgets/product_card.dart';
+import 'ProfileScreen.dart';
+import 'ManagePostsScreen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -14,25 +16,17 @@ class HomeScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: const Color(0xFFF6F7F7),
       appBar: _buildHeader(),
-      body: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // 1. Sử dụng CustomSearchBar đã tách
-            const Padding(
-              padding: EdgeInsets.all(16.0),
-              child: CustomSearchBar(hintText: 'Tìm giáo trình, nồi cơm điện, vợt...'),
-            ),
-
-            // 2. Khu vực Danh mục
-            _buildCategorySection(),
-
-            // 3. Khu vực Lưới sản phẩm
-            _buildProductSection(),
-          ],
-        ),
+      body: ListView(
+        children: [
+          const Padding(
+            padding: EdgeInsets.all(16.0),
+            child: CustomSearchBar(hintText: 'Tìm giáo trình...'),
+          ),
+          _buildCategorySection(),
+          _buildProductSection(),
+        ],
       ),
-      bottomNavigationBar: _buildBottomNav(),
+      bottomNavigationBar: _buildBottomNav(context),
     );
   }
 
@@ -46,7 +40,6 @@ class HomeScreen extends StatelessWidget {
         children: [
           const CircleAvatar(
             radius: 20,
-            backgroundImage: NetworkImage('https://via.placeholder.com/150'),
           ),
           const SizedBox(width: 12),
           Column(
@@ -185,11 +178,34 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildBottomNav() {
+  Widget _buildBottomNav(BuildContext context) {
     return BottomNavigationBar(
       type: BottomNavigationBarType.fixed,
       selectedItemColor: const Color(0xFF3E8B98),
-      currentIndex: 2,
+      currentIndex: 0,
+      onTap: (index) {
+      // Xử lý chuyển màn hình dựa trên index
+        switch (index) {
+          case 0:
+            // Navigator.push(context, MaterialPageRoute(builder: (context) => const HomeScreen()));
+            break;
+          case 1:
+            // Navigator.push(context, MaterialPageRoute(builder: (context) => const ChatScreen()));
+            break;
+          case 2:
+            Navigator.push(
+              context, 
+              MaterialPageRoute(builder: (context) => const ManagePostsScreen())
+            );
+            break;
+          case 4:
+            Navigator.push(
+              context, 
+              MaterialPageRoute(builder: (context) => const ProfileScreen())
+            );
+            break;
+        }
+      },
       items: const [
         BottomNavigationBarItem(icon: Icon(Icons.home_outlined), label: 'Trang chủ'),
         BottomNavigationBarItem(icon: Icon(Icons.chat_bubble_outline), label: 'Tin nhắn'),

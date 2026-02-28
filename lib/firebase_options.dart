@@ -46,6 +46,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: '1042792738341',
     projectId: 'app-secondchance',
     authDomain: 'app-secondchance.firebaseapp.com',
+    databaseURL: 'https://app-secondchance-default-rtdb.firebaseio.com',
     storageBucket: 'app-secondchance.firebasestorage.app',
     measurementId: 'G-XMC1F1KP44',
   );
@@ -55,6 +56,7 @@ class DefaultFirebaseOptions {
     appId: '1:1042792738341:android:36481e19ad76d1a8a319cc',
     messagingSenderId: '1042792738341',
     projectId: 'app-secondchance',
+    databaseURL: 'https://app-secondchance-default-rtdb.firebaseio.com',
     storageBucket: 'app-secondchance.firebasestorage.app',
   );
 
@@ -63,6 +65,7 @@ class DefaultFirebaseOptions {
     appId: '1:1042792738341:ios:6961c8b6c8f42b7ca319cc',
     messagingSenderId: '1042792738341',
     projectId: 'app-secondchance',
+    databaseURL: 'https://app-secondchance-default-rtdb.firebaseio.com',
     storageBucket: 'app-secondchance.firebasestorage.app',
     iosBundleId: 'com.example.appDoCu',
   );
@@ -72,6 +75,7 @@ class DefaultFirebaseOptions {
     appId: '1:1042792738341:ios:6961c8b6c8f42b7ca319cc',
     messagingSenderId: '1042792738341',
     projectId: 'app-secondchance',
+    databaseURL: 'https://app-secondchance-default-rtdb.firebaseio.com',
     storageBucket: 'app-secondchance.firebasestorage.app',
     iosBundleId: 'com.example.appDoCu',
   );
@@ -82,7 +86,9 @@ class DefaultFirebaseOptions {
     messagingSenderId: '1042792738341',
     projectId: 'app-secondchance',
     authDomain: 'app-secondchance.firebaseapp.com',
+    databaseURL: 'https://app-secondchance-default-rtdb.firebaseio.com',
     storageBucket: 'app-secondchance.firebasestorage.app',
     measurementId: 'G-SYGTMCQ0JQ',
   );
+
 }

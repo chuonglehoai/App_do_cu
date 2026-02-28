@@ -59,6 +59,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
       "fullName": name,
       "email": email,
       "uid": userCredential.user!.uid,
+      'password': password,
+      ''
       "createdAt": DateTime.now().toIso8601String(), // Realtime DB thích chuỗi String hoặc số
     });
 
@@ -199,7 +201,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   Widget _buildTopAppBar(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.all(16.0),
+      padding: const EdgeInsets.only(top: 60.0, left: 16.0, right: 16.0, bottom: 16.0),
       child: Row(
         children: [
           IconButton(
