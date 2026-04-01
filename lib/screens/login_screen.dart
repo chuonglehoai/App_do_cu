@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'register_screen.dart';
 import 'home_screen.dart'; // Import trang chủ của bạn
 import 'package:app_do_cu/showError.dart';
+import 'admin_approval_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -24,7 +25,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _passwordController = TextEditingController();
 
   // Hàm xử lý đăng nhập
-  Future<void> _login() async {
+    Future<void> _login() async {
     final email = _emailController.text.trim();
     final password = _passwordController.text;
 
@@ -36,45 +37,42 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = true);
 
     try {
-      DatabaseReference usersRef = FirebaseDatabase.instance.ref("users");
+      // 1. ĐĂNG NHẬP THÔNG QUA FIREBASE AUTH
+      UserCredential userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
 
-      DataSnapshot snapshot = await usersRef
-          .orderByChild("email")
-          .equalTo(email)
-          .get()
-          .timeout(const Duration(seconds: 10));
+      // 2. LẤY THÔNG TIN ROLE TỪ REALTIME DATABASE
+      String uid = userCredential.user!.uid;
+      DatabaseReference userRef = FirebaseDatabase.instance.ref("users/$uid");
+      DataSnapshot snapshot = await userRef.get();
 
-      if (!snapshot.exists) {
-        context.showError('Email này không tồn tại trong hệ thống');
-        setState(() => _isLoading = false);
-        return;
-      }
+      if (snapshot.exists) {
+        Map<dynamic, dynamic> userData = Map<dynamic, dynamic>.from(snapshot.value as Map);
+        String role = userData['role'] ?? 'user';
 
-      // 4. Xử lý dữ liệu trả về (Firebase luôn trả về một Map khi dùng Query)
-      // Cấu trúc: { "user_id_123": { "email": "...", "password": "..." } }
-      final usersMap = Map<dynamic, dynamic>.from(snapshot.value as Map);
-      
-      // Lấy thông tin của người dùng đầu tiên tìm thấy
-      final userData = usersMap.values.first;
-
-      if (userData['password'].toString() == password) {
-        // ĐĂNG NHẬP THÀNH CÔNG
         if (!mounted) return;
         
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Đăng nhập thành công!'), backgroundColor: Colors.green),
-        );
-        Provider.of<UserProvider>(context, listen: false).setUserId(usersMap.keys.first.toString()); // Lưu userId vào Provider
-        // Chuyển sang màn hình Home
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const HomeScreen()),
-        );
-      } else {
-        // SAI MẬT KHẨU
-        context.showError('Mật khẩu không chính xác. Vui lòng thử lại');
-      }
+        // Lưu UID vào Provider để các màn hình khác sử dụng
+        Provider.of<UserProvider>(context, listen: false).setUserId(uid);
 
+        // Điều hướng dựa trên Role
+        if (role == 'admin') {
+          Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const AdminApprovalScreen()));
+        } else {
+          Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const HomeScreen()));
+        }
+      }
+    } on FirebaseAuthException catch (e) {
+      // Firebase Auth sẽ tự trả về lỗi nếu sai mật khẩu hoặc không có user
+      if (e.code == 'user-not-found') {
+        context.showError('Email này không tồn tại trong hệ thống');
+      } else if (e.code == 'wrong-password') {
+        context.showError('Mật khẩu không chính xác. Vui lòng thử lại');
+      } else {
+        context.showError('Đã có lỗi xảy ra: ${e.message}');
+      }
     } catch (e) {
       context.showError('Lỗi kết nối: $e');
     } finally {

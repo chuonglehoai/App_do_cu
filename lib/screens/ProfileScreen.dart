@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:app_do_cu/UserProvider.dart';
+import 'package:app_do_cu/widgets/custom_bottom_nav.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_database/firebase_database.dart';
@@ -178,6 +179,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ],
             ),
           ),
+      bottomNavigationBar: const CustomBottomNav(currentIndex: 4),
     );
   }
 

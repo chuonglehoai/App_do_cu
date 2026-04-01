@@ -33,7 +33,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
   bool _isUploading = false;
   bool _isDonation = false;
 
-  final List<String> _categories = ['Đồ gia dụng', 'Đồ dùng học tập', 'Thiết bị điện tử', 'Khác'];
+  final List<String> _categories = ['Đồ gia dụng', 'Đồ dùng học tập', 'Thiết bị điện tử'];
 
   Future<void> _pickImage() async {
     if (_selectedImages.length >= 6) {

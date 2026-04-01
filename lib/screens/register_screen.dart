@@ -1,9 +1,10 @@
-
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-// THÊM 2 DÒNG IMPORT NÀY
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:mailer/mailer.dart';
+import 'package:mailer/smtp_server.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -20,14 +21,43 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _confirmPasswordController = TextEditingController(); // Nên có thêm cái này
+  final TextEditingController _confirmPasswordController = TextEditingController(); 
+  final TextEditingController _otpController = TextEditingController();
 
-  // ĐƯA HÀM _signUp VÀO TRONG NÀY
-  Future<void> _signUp() async {
+  String? _sentOtp; 
+  bool _isVerificationMode = false; 
+
+  String _generateOtp() {
+    return (Random().nextInt(900000) + 100000).toString();
+  }
+  
+  Future<void> _sendOtpEmail(String recipientEmail, String otp) async {
+    // QUAN TRỌNG: Thay bằng email và mật khẩu ứng dụng của bạn
+    String username = 'chuonglehoai1210@gmail.com'; 
+    String password = 'zlif rrss hqcs digk'; 
+
+    final smtpServer = gmail(username, password);
+
+    final message = Message()
+      ..from = Address(username, 'App Do Cu Support')
+      ..recipients.add(recipientEmail)
+      ..subject = 'Mã xác thực đăng ký tài khoản'
+      ..text = 'Mã OTP của bạn là: $otp. Vui lòng không chia sẻ mã này cho bất kỳ ai.';
+
+    try {
+      await send(message, smtpServer);
+    } catch (e) {
+      throw Exception('Không thể gửi mail xác nhận: $e');
+    }
+  }
+
+  // Bước 1: Kiểm tra thông tin và gửi OTP
+  Future<void> _handleInitialSignUp() async {
     final name = _nameController.text.trim();
     final email = _emailController.text.trim();
     final password = _passwordController.text;
     final confirmPassword = _confirmPasswordController.text;
+
     if (name.isEmpty || email.isEmpty || password.isEmpty || confirmPassword.isEmpty) {
       _showError('Vui lòng nhập đầy đủ thông tin');
       return;
@@ -45,40 +75,65 @@ class _RegisterScreenState extends State<RegisterScreen> {
       _showError('Mật khẩu xác nhận không khớp');
       return;
     }
+
+    setState(() => _isLoading = true);
+    
+    try {
+      _sentOtp = _generateOtp();
+      await _sendOtpEmail(email, _sentOtp!);
+      
+      setState(() {
+        _isVerificationMode = true;
+        _isLoading = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Mã xác thực đã được gửi tới Email của bạn')),
+      );
+    } catch (e) {
+      setState(() => _isLoading = false);
+      _showError(e.toString());
+    }
+  }
+
+  // Bước 2: Xác nhận OTP và tạo tài khoản chính thức
+  Future<void> _verifyAndCreateAccount() async {
+    if (_otpController.text.trim() != _sentOtp) {
+      _showError('Mã OTP không chính xác');
+      return;
+    }
+
     setState(() => _isLoading = true);
     try {
-      UserCredential userCredential = await FirebaseAuth.instance
-          .createUserWithEmailAndPassword(
-        email: email,
-        password: password,
+      UserCredential userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
       );
 
       DatabaseReference ref = FirebaseDatabase.instance.ref("users/${userCredential.user!.uid}");
-
-    await ref.set({
-      "fullName": name,
-      "email": email,
-      "uid": userCredential.user!.uid,
-      'password': password,
-      ''
-      "createdAt": DateTime.now().toIso8601String(), // Realtime DB thích chuỗi String hoặc số
-    });
+      await ref.set({
+        "fullName": _nameController.text.trim(),
+        "email": _emailController.text.trim(),
+        "uid": userCredential.user!.uid,
+        "createdAt": DateTime.now().toIso8601String(),
+        'role': 'user', 
+        'password': _passwordController.text,
+      });
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Đăng ký thành công!')),
+        const SnackBar(content: Text('Đăng ký thành công!'), backgroundColor: Colors.green),
       );
-      Navigator.pop(context);
-
+      Navigator.pop(context); 
     } on FirebaseAuthException catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message ?? 'Đã có lỗi xảy ra')),
-      );
+      _showError(e.message ?? 'Lỗi đăng ký');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
+
   void _showError(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Colors.red,),
+      SnackBar(content: Text(message), backgroundColor: Colors.red),
     );
   }
 
@@ -96,76 +151,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               Expanded(
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                  child: Column(
-                    children: [
-                      const SizedBox(height: 32),
-                      Text('Tạo Tài Khoản', style: GoogleFonts.lexend(fontSize: 32, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 32),
-
-                      // --- Full Name ---
-                      _buildInputLabel('Họ và tên'),
-                      TextField(
-                        controller: _nameController, // GÁN Ở ĐÂY
-                        decoration: _buildInputDecoration('Nhập họ tên đầy đủ'),
-                      ),
-                      const SizedBox(height: 16),
-
-                      // --- Email ---
-                      _buildInputLabel('Email sinh viên'),
-                      TextField(
-                        controller: _emailController, // GÁN Ở ĐÂY
-                        decoration: _buildInputDecoration('name@student.edu.vn'),
-                        keyboardType: TextInputType.emailAddress,
-                      ),
-                      const SizedBox(height: 16),
-
-                      // --- Password ---
-                      _buildInputLabel('Mật khẩu'),
-                      TextField(
-                        controller: _passwordController, // GÁN Ở ĐÂY
-                        obscureText: !_isPasswordVisible,
-                        decoration: _buildInputDecoration('Tạo mật khẩu mạnh').copyWith(
-                          suffixIcon: IconButton(
-                            icon: Icon(_isPasswordVisible ? Icons.visibility : Icons.visibility_off),
-                            onPressed: () => setState(() => _isPasswordVisible = !_isPasswordVisible),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-
-                      // --- Confirm Password ---
-                      _buildInputLabel('Xác nhận mật khẩu'),
-                      TextField(
-                        controller: _confirmPasswordController, // GÁN Ở ĐÂY
-                        obscureText: !_isConfirmPasswordVisible,
-                        decoration: _buildInputDecoration('Nhập lại mật khẩu').copyWith(
-                          suffixIcon: IconButton(
-                            icon: Icon(_isConfirmPasswordVisible ? Icons.visibility : Icons.visibility_off),
-                            onPressed: () => setState(() => _isConfirmPasswordVisible = !_isConfirmPasswordVisible),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 32),
-
-                      // --- Register Button ---
-                      SizedBox(
-                        width: double.infinity,
-                        height: 56,
-                        child: ElevatedButton(
-                          onPressed: _isLoading ? null : _signUp, // Vô hiệu hóa khi đang load
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF137FEC),
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          ),
-                          child: _isLoading 
-                            ? const CircularProgressIndicator(color: Colors.white) 
-                            : const Text('Đăng Ký Ngay', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                        ),
-                      ),
-                      const SizedBox(height: 32),
-                    ],
-                  ),
+                  child: _isVerificationMode ? _buildOtpForm() : _buildRegisterForm(),
                 ),
               ),
             ],
@@ -175,7 +161,94 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
-  // Tái sử dụng các Helpers từ trang Login của bạn
+  // Form xác thực mã OTP
+  Widget _buildOtpForm() {
+    return Column(
+      children: [
+        const SizedBox(height: 32),
+        Text('Xác thực Email', style: GoogleFonts.lexend(fontSize: 28, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 16),
+        Text('Mã OTP đã được gửi đến:\n${_emailController.text}', textAlign: TextAlign.center),
+        const SizedBox(height: 32),
+        _buildInputLabel('Nhập mã xác thực'),
+        TextField(
+          controller: _otpController,
+          keyboardType: TextInputType.number,
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: 10),
+          decoration: _buildInputDecoration('000000'),
+        ),
+        const SizedBox(height: 32),
+        _buildButton('Xác Nhận & Đăng Ký', _verifyAndCreateAccount),
+        TextButton(
+          onPressed: () => setState(() => _isVerificationMode = false),
+          child: const Text('Quay lại chỉnh sửa thông tin'),
+        )
+      ],
+    );
+  }
+
+  // Form nhập thông tin đăng ký ban đầu
+  Widget _buildRegisterForm() {
+    return Column(
+      children: [
+        const SizedBox(height: 32),
+        Text('Tạo Tài Khoản', style: GoogleFonts.lexend(fontSize: 32, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 32),
+        _buildInputLabel('Họ và tên'),
+        TextField(controller: _nameController, decoration: _buildInputDecoration('Nhập họ tên đầy đủ')),
+        const SizedBox(height: 16),
+        _buildInputLabel('Email sinh viên'),
+        TextField(controller: _emailController, decoration: _buildInputDecoration('name@student.edu.vn'), keyboardType: TextInputType.emailAddress),
+        const SizedBox(height: 16),
+        _buildInputLabel('Mật khẩu'),
+        TextField(
+          controller: _passwordController,
+          obscureText: !_isPasswordVisible,
+          decoration: _buildInputDecoration('Tạo mật khẩu mạnh').copyWith(
+            suffixIcon: IconButton(
+              icon: Icon(_isPasswordVisible ? Icons.visibility : Icons.visibility_off),
+              onPressed: () => setState(() => _isPasswordVisible = !_isPasswordVisible),
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        _buildInputLabel('Xác nhận mật khẩu'),
+        TextField(
+          controller: _confirmPasswordController,
+          obscureText: !_isConfirmPasswordVisible,
+          decoration: _buildInputDecoration('Nhập lại mật khẩu').copyWith(
+            suffixIcon: IconButton(
+              icon: Icon(_isConfirmPasswordVisible ? Icons.visibility : Icons.visibility_off),
+              onPressed: () => setState(() => _isConfirmPasswordVisible = !_isConfirmPasswordVisible),
+            ),
+          ),
+        ),
+        const SizedBox(height: 32),
+        _buildButton('Gửi Mã Xác Thực', _handleInitialSignUp),
+        const SizedBox(height: 32),
+      ],
+    );
+  }
+
+  Widget _buildButton(String label, VoidCallback onPressed) {
+    return SizedBox(
+      width: double.infinity,
+      height: 56,
+      child: ElevatedButton(
+        onPressed: _isLoading ? null : onPressed,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF137FEC),
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+        child: _isLoading 
+          ? const CircularProgressIndicator(color: Colors.white) 
+          : Text(label, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+      ),
+    );
+  }
+
   Widget _buildInputLabel(String label) {
     return Align(
       alignment: Alignment.centerLeft,
@@ -191,7 +264,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       hintText: hint,
       hintStyle: const TextStyle(color: Color(0xFF617589)),
       filled: true,
-      fillColor: const Color(0xFFF6F7F8), // Đổi nhẹ màu nền input cho phân biệt
+      fillColor: const Color(0xFFF6F7F8),
       contentPadding: const EdgeInsets.all(15),
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
       enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
@@ -215,7 +288,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               style: GoogleFonts.lexend(fontSize: 18, fontWeight: FontWeight.bold, color: const Color(0xFF111418)),
             ),
           ),
-          const SizedBox(width: 48), // Bù trừ cho nút back để tiêu đề nằm giữa
+          const SizedBox(width: 48),
         ],
       ),
     );
