@@ -1,10 +1,11 @@
+import 'package:app_do_cu/UserProvider.dart';
 import 'package:app_do_cu/screens/ProfileScreen.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart'; 
-import 'package:app_do_cu/services/database_product.dart';
-import 'add_post_screen.dart'; //
-import 'home_screen.dart'; //
+import 'package:firebase_database/firebase_database.dart';
+import 'add_post_screen.dart';
+import 'home_screen.dart';
 
 class ManagePostsScreen extends StatefulWidget {
   const ManagePostsScreen({super.key});
@@ -15,7 +16,7 @@ class ManagePostsScreen extends StatefulWidget {
 
 class _ManagePostsScreenState extends State<ManagePostsScreen> with TickerProviderStateMixin {
   late TabController _tabController;
-  final DatabaseProduct _dbService = DatabaseProduct();
+  final DatabaseReference _dbRef = FirebaseDatabase.instance.ref();
 
   @override
   void initState() {
@@ -23,134 +24,182 @@ class _ManagePostsScreenState extends State<ManagePostsScreen> with TickerProvid
     _tabController = TabController(length: 3, vsync: this);
   }
 
+  // Widget hiển thị danh sách bài đăng dựa trên Stream
+  Widget _buildPostListStream(Stream<DatabaseEvent> stream, String targetStatus, {bool isPostedNode = false}) {
+  final userId = context.read<UserProvider>().userId;
+
+  return StreamBuilder<DatabaseEvent>(
+    stream: stream,
+    builder: (context, snapshot) {
+      if (snapshot.hasError) return const Center(child: Text("Lỗi tải dữ liệu"));
+      if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+
+      List<Map<String, dynamic>> displayPosts = [];
+      
+      // KIỂM TRA AN TOÀN: snapshot.data và snapshot.data.snapshot.value không được Null
+      if (snapshot.hasData && snapshot.data!.snapshot.value != null) {
+        final data = snapshot.data!.snapshot.value;
+        
+        if (data is Map) { // Đảm bảo dữ liệu trả về là một Map
+          if (isPostedNode) {
+            // Mục "Đã đăng": Duyệt qua các danh mục
+            data.forEach((catName, postsInCat) {
+              if (postsInCat is Map) {
+                postsInCat.forEach((postId, postData) {
+                  if (postData is Map && postData['sellerId'] == userId) {
+                    displayPosts.add({...Map<String, dynamic>.from(postData), 'id': postId});
+                  }
+                });
+              }
+            });
+          } else {
+            // Mục "Đang chờ" & "Bị từ chối"
+            data.forEach((postId, postData) {
+              if (postData is Map && 
+                  postData['sellerId'] == userId && 
+                  postData['status'] == targetStatus) {
+                displayPosts.add({...Map<String, dynamic>.from(postData), 'id': postId});
+              }
+            });
+          }
+        }
+      }
+
+      if (displayPosts.isEmpty) {
+        return const Center(child: Text("Không có bài đăng nào"));
+      }
+
+      // Sắp xếp theo thời gian mới nhất
+      displayPosts.sort((a, b) => (b['createdAt'] ?? 0).compareTo(a['createdAt'] ?? 0));
+
+      return ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: displayPosts.length,
+        itemBuilder: (context, index) {
+          final post = displayPosts[index];
+          return _buildPostCard(
+            title: post['title'] ?? "Không tiêu đề",
+            price: "${post['price'] ?? 0}đ",
+            status: post['status'] ?? "",
+            // Kiểm tra list images an toàn
+            imageUrl: (post['images'] != null && (post['images'] as List).isNotEmpty) 
+                ? post['images'][0] 
+                : "https://via.placeholder.com/100",
+            reason: post['rejectReason'], // Sẽ là null nếu không phải mục Bị từ chối
+          );
+        },
+      );
+    },
+  );
+}
   @override
   Widget build(BuildContext context) {
     const Color primaryColor = Color(0xFF3E8B98);
-    const Color backgroundLight = Color(0xFFF6F7F7);
 
     return Scaffold(
-      backgroundColor: backgroundLight,
+      backgroundColor: const Color(0xFFF6F7F7),
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: Color(0xFF131616), size: 20),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text('Quản lý bài đăng', 
-          style: GoogleFonts.beVietnamPro(color: const Color(0xFF131616), fontSize: 18, fontWeight: FontWeight.bold)),
-        centerTitle: true,
+        title: Text('Quản lý bài đăng', style: GoogleFonts.beVietnamPro(color: Colors.black, fontSize: 18, fontWeight: FontWeight.bold)),
         bottom: TabBar(
           controller: _tabController,
           labelColor: primaryColor,
           unselectedLabelColor: Colors.grey,
           indicatorColor: primaryColor,
           tabs: const [
-            Tab(text: 'Đang chờ'),
-            Tab(text: 'Đã đăng'),
-            Tab(text: 'Bị từ chối'),
+            Tab(text: "Đang chờ"),
+            Tab(text: "Đã đăng"),
+            Tab(text: "Bị từ chối"),
           ],
         ),
       ),
       body: TabBarView(
         controller: _tabController,
         children: [
-          _buildPostList(status: 'pending'),
-          _buildPostList(status: 'published'),
-          _buildPostList(status: 'rejected'),
+          // Mục 1: Đang chờ (status: pending trong posts)
+          _buildPostListStream(_dbRef.child("posts").onValue, "pending"),
+          // Mục 2: Đã đăng (trong node posted)
+          _buildPostListStream(_dbRef.child("posted").onValue, "approved", isPostedNode: true),
+          // Mục 3: Bị từ chối (status: refused trong posts)
+          _buildPostListStream(_dbRef.child("posts").onValue, "refused"),
         ],
       ),
       floatingActionButton: FloatingActionButton(
+        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const AddPostScreen())),
         backgroundColor: primaryColor,
-        onPressed: () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => const AddPostScreen()),
-        ),
         child: const Icon(Icons.add, color: Colors.white),
       ),
+      bottomNavigationBar: _buildBottomNav(context),
     );
   }
 
-  // Hàm build danh sách (Giao diện lặp lại)
-  Widget _buildPostList({required String status}) {
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: 3, // Sau này thay bằng list thực tế từ Service
-      itemBuilder: (context, index) {
-        if (status == 'rejected') return _buildRejectedCard();
-        return _buildNormalCard(status);
-      },
-    );
-  }
-
-  Widget _buildNormalCard(String status) {
+  Widget _buildPostCard({required String title, required String price, required String status, required String imageUrl, String? reason}) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
-      child: Row(
-        children: [
-          Container(width: 64, height: 64, decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(8))),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Tên sản phẩm mẫu', style: TextStyle(fontWeight: FontWeight.bold)),
-                const Text('Hôm nay, 10:45', style: TextStyle(color: Colors.grey, fontSize: 12)),
-                Text(status.toUpperCase(), style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF3E8B98))),
-              ],
-            ),
-          ),
-          const Icon(Icons.edit_square, color: Colors.grey),
-        ],
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 5)],
       ),
-    );
-  }
-
-  Widget _buildRejectedCard() {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.red.withOpacity(0.1))),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(children: [ /* Tương tự card trên nhưng màu xám */ ]),
-          const SizedBox(height: 10),
-          Container(
-            padding: const EdgeInsets.all(10),
-            color: Colors.red.withOpacity(0.05),
-            child: const Text('Lý do: Hình ảnh mờ...', style: TextStyle(color: Colors.red, fontSize: 12)),
+          Row(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.network(imageUrl, width: 80, height: 80, fit: BoxFit.cover),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                    const SizedBox(height: 4),
+                    Text(price, style: const TextStyle(color: Color(0xFF3E8B98), fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 4),
+                    _buildStatusChip(status),
+                  ],
+                ),
+              ),
+            ],
           ),
+          if (status == 'refused' && reason != null) ...[
+            const Divider(),
+            Text("Lý do từ chối: $reason", style: const TextStyle(color: Colors.red, fontSize: 13, fontWeight: FontWeight.w500)),
+          ]
         ],
       ),
     );
   }
+
+  Widget _buildStatusChip(String status) {
+    Color color;
+    String text;
+    switch (status) {
+      case 'pending': color = Colors.orange; text = "Chờ duyệt"; break;
+      case 'approved': color = Colors.green; text = "Đã đăng"; break;
+      case 'refused': color = Colors.red; text = "Bị từ chối"; break;
+      default: color = Colors.grey; text = "Không xác định";
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(4)),
+      child: Text(text, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.bold)),
+    );
+  }
+
   Widget _buildBottomNav(BuildContext context) {
     return BottomNavigationBar(
       type: BottomNavigationBarType.fixed,
       selectedItemColor: const Color(0xFF3E8B98),
       currentIndex: 2,
       onTap: (index) {
-      // Xử lý chuyển màn hình dựa trên index
-        switch (index) {
-          case 0:
-            Navigator.push(
-              context, 
-              MaterialPageRoute(builder: (context) => const HomeScreen())
-            );
-            break;
-          case 1:
-            // Navigator.push(context, MaterialPageRoute(builder: (context) => const ChatScreen()));
-            break;
-          case 2:
-            break;
-          case 4:
-            Navigator.push(
-              context, 
-              MaterialPageRoute(builder: (context) => const ProfileScreen())
-            );
-            break;
-        }
+        if (index == 0) Navigator.push(context, MaterialPageRoute(builder: (context) => const HomeScreen()));
+        if (index == 4) Navigator.push(context, MaterialPageRoute(builder: (context) => const ProfileScreen()));
       },
       items: const [
         BottomNavigationBarItem(icon: Icon(Icons.home_outlined), label: 'Trang chủ'),
