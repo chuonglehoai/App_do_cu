@@ -4,6 +4,11 @@ import 'package:google_fonts/google_fonts.dart';
 // THÊM 2 DÒNG IMPORT NÀY
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
+<<<<<<< Updated upstream
+=======
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+>>>>>>> Stashed changes
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -22,8 +27,45 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _confirmPasswordController = TextEditingController(); // Nên có thêm cái này
 
+<<<<<<< Updated upstream
   // ĐƯA HÀM _signUp VÀO TRONG NÀY
   Future<void> _signUp() async {
+=======
+  String? _sentOtp; 
+  bool _isVerificationMode = false; 
+
+  String _generateOtp() {
+    return (Random().nextInt(900000) + 100000).toString();
+  }
+  
+  Future<void> _sendOtpEmail(String recipientEmail, String otp) async {
+  const serviceId = 'app_do_cu';
+  const templateId = 'template_g2cdqig';
+  const userId = 'x5DMNpK4ZCm6EdszE';
+
+  final url = Uri.parse('https://api.emailjs.com/api/v1.0/email/send');
+  final response = await http.post(
+      url,
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode({
+        'service_id': serviceId,
+        'template_id': templateId,
+        'user_id': userId,
+        'template_params': {
+          'to_email': recipientEmail,
+          'otp_code': otp,
+        },
+      }),
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Không thể gửi mail: ${response.body}');
+    }
+  }
+
+  // Bước 1: Kiểm tra thông tin và gửi OTP
+  Future<void> _handleInitialSignUp() async {
+>>>>>>> Stashed changes
     final name = _nameController.text.trim();
     final email = _emailController.text.trim();
     final password = _passwordController.text;

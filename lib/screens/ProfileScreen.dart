@@ -188,15 +188,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
           alignment: Alignment.bottomRight,
           children: [
             Container(
-              width: 128, height: 128,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                image: DecorationImage(
-                  image: NetworkImage(userData['avatar']),
-                  fit: BoxFit.cover,
-                ),
+            width: 128, height: 128,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              image: DecorationImage(
+                // PHÒNG THỦ: Nếu chưa có ảnh, dùng ảnh mặc định
+                image: NetworkImage(userData['avatar'] ?? 'https://via.placeholder.com/150'),
+                fit: BoxFit.cover,
               ),
             ),
+          ),
             IconButton(
               onPressed: _handleUpdateAvatar,
               icon: Container(
@@ -208,15 +209,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ],
         ),
         const SizedBox(height: 16),
-        Text(userData['fullName'] ?? 'Chưa cập nhật', style: GoogleFonts.beVietnamPro(fontSize: 24, fontWeight: FontWeight.bold)),
-        Text('MSSV: ${userData['studentId'] ?? 'N/A'}', style: const TextStyle(color: Colors.grey)),
+        // PHÒNG THỦ: Thêm giá trị mặc định cho tất cả các trường
+        Text(userData['fullName'] ?? 'Chưa cập nhật tên', style: GoogleFonts.beVietnamPro(fontSize: 24, fontWeight: FontWeight.bold)),
+        Text('MSSV: ${userData['studentId'] ?? 'Chưa có MSSV'}', style: const TextStyle(color: Colors.grey)),
         const SizedBox(height: 4),
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             const Icon(Icons.school, size: 16, color: Colors.grey),
             const SizedBox(width: 4),
-            Text(userData['address'] ?? 'Đại học Bách Khoa TP.HCM', style: GoogleFonts.beVietnamPro(color: Colors.grey)),
+            Text(userData['school'] ?? userData['address'] ?? 'Chưa cập nhật trường', style: GoogleFonts.beVietnamPro(color: Colors.grey)),
           ],
         ),
         Row(

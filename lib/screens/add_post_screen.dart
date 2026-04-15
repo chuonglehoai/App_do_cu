@@ -1,11 +1,14 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:app_do_cu/UserProvider.dart';
 import 'package:app_do_cu/services/cloudinary_service.dart';
 import 'package:app_do_cu/services/database_product.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 class AddPostScreen extends StatefulWidget {
   const AddPostScreen({super.key});
@@ -29,24 +32,30 @@ class _AddPostScreenState extends State<AddPostScreen> {
   final TextEditingController _descController = TextEditingController();
   
   String _selectedCategory = 'Đồ gia dụng';
-  List<File> _selectedImages = [];
+  List<XFile> _selectedImages = [];
   bool _isUploading = false;
   bool _isDonation = false;
 
   final List<String> _categories = ['Đồ gia dụng', 'Đồ dùng học tập', 'Thiết bị điện tử', 'Khác'];
 
   Future<void> _pickImage() async {
-    if (_selectedImages.length >= 6) {
-      _showMsg("Bạn chỉ được chọn tối đa 6 ảnh");
-      return;
-    }
-    File? picked = await _imageService.pickImage();
-    if (picked != null) {
-      setState(() => _selectedImages.add(picked));
+    final ImagePicker picker = ImagePicker();
+    // Cho phép chọn nhiều ảnh
+    final List<XFile> images = await picker.pickMultiImage();
+
+    if (images.isNotEmpty) {
+      setState(() {
+        // Giới hạn tối đa 6 ảnh
+        if (_selectedImages.length + images.length <= 6) {
+          _selectedImages.addAll(images);
+        } else {
+          _showMsg("Chỉ được chọn tối đa 6 ảnh");
+        }
+      });
     }
   }
 
-  void _showFullScreenImage(File imageFile) {
+  void _showFullScreenImage(XFile imageFile) {
     showDialog(
       context: context,
       builder: (context) => Dialog(
@@ -58,7 +67,10 @@ class _AddPostScreenState extends State<AddPostScreen> {
             InteractiveViewer(
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(12),
-                child: Image.file(imageFile, fit: BoxFit.contain),
+                // Trên Web dùng Image.network với path là Blob URL
+                child: kIsWeb 
+                    ? Image.network(imageFile.path, fit: BoxFit.contain)
+                    : Image.file(File(imageFile.path), fit: BoxFit.contain),
               ),
             ),
             Positioned(
@@ -84,8 +96,10 @@ class _AddPostScreenState extends State<AddPostScreen> {
     setState(() => _isUploading = true);
     try {
       List<String> imageUrls = [];
-      for (var file in _selectedImages) {
-        String? url = await _imageService.uploadImage(file, folderName: 'posts');
+      for (var xFile in _selectedImages) {
+        // Chuyển XFile thành File để phù hợp với CloudinaryService hiện tại của bạn
+        File fileToUpload = File(xFile.path);
+        String? url = await _imageService.uploadImage(fileToUpload, folderName: 'posts');
         if (url != null) imageUrls.add(url);
       }
 
@@ -234,7 +248,20 @@ class _AddPostScreenState extends State<AddPostScreen> {
           onTap: () => _showFullScreenImage(_selectedImages[index]),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(8),
-            child: Image.file(_selectedImages[index], fit: BoxFit.cover, width: double.infinity, height: double.infinity),
+            // SỬA: Cách hiển thị ảnh preview để không lỗi trên Web
+            child: kIsWeb 
+              ? Image.network(
+                  _selectedImages[index].path, 
+                  fit: BoxFit.cover, 
+                  width: double.infinity, 
+                  height: double.infinity
+                )
+              : Image.file(
+                  File(_selectedImages[index].path), 
+                  fit: BoxFit.cover, 
+                  width: double.infinity, 
+                  height: double.infinity
+                ),
           ),
         ),
         Positioned(
