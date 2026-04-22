@@ -1,43 +1,38 @@
-import 'dart:io';
 import 'package:cloudinary_public/cloudinary_public.dart';
-import 'package:image_picker/image_picker.dart'; // Đảm bảo đã thêm image_picker vào pubspec.yaml
+import 'package:image_picker/image_picker.dart'; 
 
 class CloudinaryService {
-  // Cấu hình Cloudinary của bạn
+  // Cấu hình Cloudinary
   final cloudinary = CloudinaryPublic(
     'dmrc4myd6', 
     'App_do_cu', 
     cache: false,
   );
 
-  // Khởi tạo ImagePicker để chọn ảnh từ thư viện
   final ImagePicker _picker = ImagePicker();
 
-  // 1. HÀM CHỌN ẢNH TỪ THƯ VIỆN (Thay thế StorageService cũ)
-  Future<File?> pickImage() async {
+  // 1. HÀM CHỌN ẢNH (Trả về XFile để dùng được cho cả Web)
+  Future<XFile?> pickImage() async {
     try {
       final XFile? pickedFile = await _picker.pickImage(
         source: ImageSource.gallery,
-        imageQuality: 70, // Nén ảnh xuống 70% để tiết kiệm băng thông Cloudinary
+        imageQuality: 70,
       );
-      
-      if (pickedFile != null) {
-        return File(pickedFile.path);
-      }
-      return null;
+      return pickedFile; 
     } catch (e) {
       print("Lỗi khi chọn ảnh: $e");
       return null;
     }
   }
 
-  // 2. HÀM TẢI ẢNH LÊN CLOUDINARY
-  Future<String?> uploadImage(File imageFile, {String folderName = 'avatars'}) async {
+  // 2. HÀM TẢI ẢNH (Đã đổi tham số từ File thành XFile)
+  Future<String?> uploadImage(XFile imageFile, {String folderName = 'avatars'}) async {
     try {
+      // CloudinaryPublic hỗ trợ tải lên từ path của XFile
       CloudinaryResponse response = await cloudinary.uploadFile(
         CloudinaryFile.fromFile(
           imageFile.path, 
-          folder: folderName, // Sử dụng tham số truyền vào thay vì fix cứng
+          folder: folderName, 
         ),
       );
       

@@ -24,8 +24,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
 
-  // Hàm xử lý đăng nhập
-    Future<void> _login() async {
+  Future<void> _login() async {
     final email = _emailController.text.trim();
     final password = _passwordController.text;
 
@@ -43,35 +42,53 @@ class _LoginScreenState extends State<LoginScreen> {
         password: password,
       );
 
-      // 2. LẤY THÔNG TIN ROLE TỪ REALTIME DATABASE
       String uid = userCredential.user!.uid;
-      DatabaseReference userRef = FirebaseDatabase.instance.ref("users/$uid");
-      DataSnapshot snapshot = await userRef.get();
 
-      if (snapshot.exists) {
-        Map<dynamic, dynamic> userData = Map<dynamic, dynamic>.from(snapshot.value as Map);
-        String role = userData['role'] ?? 'user';
+      // 2. KIỂM TRA TÀI KHOẢN ADMIN TRƯỚC
+      DatabaseReference adminRef = FirebaseDatabase.instance.ref("admins/$uid");
+      DataSnapshot adminSnapshot = await adminRef.get();
 
+      if (adminSnapshot.exists) {
+        // Nếu tồn tại trong node admins -> Là Admin
         if (!mounted) return;
         
-        // Lưu UID vào Provider để các màn hình khác sử dụng
+        // Lưu UID vào Provider
         Provider.of<UserProvider>(context, listen: false).setUserId(uid);
 
-        // Điều hướng dựa trên Role
-        if (role == 'admin') {
-          Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const AdminApprovalScreen()));
-        } else {
-          Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const HomeScreen()));
-        }
+        // Chuyển đến màn hình Admin
+        Navigator.pushReplacement(
+          context, 
+          MaterialPageRoute(builder: (context) => const AdminApprovalScreen())
+        );
+        return; // Kết thúc hàm tại đây vì đã tìm thấy Admin
       }
+
+      // 3. NẾU KHÔNG PHẢI ADMIN, KIỂM TRA TÀI KHOẢN USER
+      DatabaseReference userRef = FirebaseDatabase.instance.ref("users/$uid");
+      DataSnapshot userSnapshot = await userRef.get();
+
+      if (userSnapshot.exists) {
+        if (!mounted) return;
+        
+        Provider.of<UserProvider>(context, listen: false).setUserId(uid);
+
+        // Chuyển đến màn hình Trang chủ User
+        Navigator.pushReplacement(
+          context, 
+          MaterialPageRoute(builder: (context) => const HomeScreen())
+        );
+      } else {
+        // Trường hợp login thành công Auth nhưng không tìm thấy dữ liệu trong Database
+        context.showError('Tài khoản chưa được thiết lập dữ liệu trên hệ thống.');
+      }
+
     } on FirebaseAuthException catch (e) {
-      // Firebase Auth sẽ tự trả về lỗi nếu sai mật khẩu hoặc không có user
       if (e.code == 'user-not-found') {
         context.showError('Email này không tồn tại trong hệ thống');
       } else if (e.code == 'wrong-password') {
         context.showError('Mật khẩu không chính xác. Vui lòng thử lại');
       } else {
-        context.showError('Đã có lỗi xảy ra: ${e.message}');
+        context.showError('Lỗi xác thực: ${e.message}');
       }
     } catch (e) {
       context.showError('Lỗi kết nối: $e');
