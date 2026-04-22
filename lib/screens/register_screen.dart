@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
-import 'package:mailer/mailer.dart';
-import 'package:mailer/smtp_server.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -32,24 +32,29 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
   
   Future<void> _sendOtpEmail(String recipientEmail, String otp) async {
-    // QUAN TRỌNG: Thay bằng email và mật khẩu ứng dụng của bạn
-    String username = 'chuonglehoai1210@gmail.com'; 
-    String password = 'zlif rrss hqcs digk'; 
+  const serviceId = 'app_do_cu';
+  const templateId = 'template_g2cdqig';
+  const userId = 'x5DMNpK4ZCm6EdszE';
 
-    final smtpServer = gmail(username, password);
+  final url = Uri.parse('https://api.emailjs.com/api/v1.0/email/send');
+  final response = await http.post(
+    url,
+    headers: {'Content-Type': 'application/json'},
+    body: json.encode({
+      'service_id': serviceId,
+      'template_id': templateId,
+      'user_id': userId,
+      'template_params': {
+        'to_email': recipientEmail,
+        'otp_code': otp,
+      },
+    }),
+  );
 
-    final message = Message()
-      ..from = Address(username, 'App Do Cu Support')
-      ..recipients.add(recipientEmail)
-      ..subject = 'Mã xác thực đăng ký tài khoản'
-      ..text = 'Mã OTP của bạn là: $otp. Vui lòng không chia sẻ mã này cho bất kỳ ai.';
-
-    try {
-      await send(message, smtpServer);
-    } catch (e) {
-      throw Exception('Không thể gửi mail xác nhận: $e');
-    }
+  if (response.statusCode != 200) {
+    throw Exception('Không thể gửi mail: ${response.body}');
   }
+}
 
   // Bước 1: Kiểm tra thông tin và gửi OTP
   Future<void> _handleInitialSignUp() async {

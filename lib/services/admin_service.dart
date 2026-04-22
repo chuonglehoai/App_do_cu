@@ -7,11 +7,12 @@ class AdminService {
     return _dbRef.child("posts").onValue;
   }
 
-  // --- HÀM DUYỆT BÀI ---
+  // --- HÀM DUYỆT BÀI (Đã thêm thông báo) ---
   Future<void> approvePost(Map<String, dynamic> post, String adminId) async {
     String postId = post['id'];
     String sellerId = post['sellerId'];
     String category = post['category'] ?? 'Khác';
+    String postTitle = post['title'] ?? "Bài đăng";
 
     Map<String, dynamic> updateData = {};
 
@@ -31,17 +32,29 @@ class AdminService {
     // 3. Xóa khỏi hàng chờ posts
     updateData["posts/$postId"] = null;
     
-    // 4. Lưu log Admin: admin_logs/Approved/tên danh mục/id bài đăng
+    // 4. Lưu log Admin
     updateData["admin_logs/$adminId/Approved/$category/$postId"] = ServerValue.timestamp;
+
+    // --- MỚI: GỬI THÔNG BÁO CHO USER ---
+    String notifId = _dbRef.child("notifications/$sellerId").push().key ?? postId;
+    updateData["notifications/$sellerId/$notifId"] = {
+      "type": "post_approved",
+      "title": "Duyệt bài thành công",
+      "content": "Chúc mừng! Bài đăng '$postTitle' của bạn đã được duyệt thành công.",
+      "timestamp": ServerValue.timestamp,
+      "isRead": false,
+      "tabIndex": 1 // Tab "Đã đăng" trong ManagePostsScreen
+    };
 
     await _dbRef.update(updateData);
   }
 
-  // --- HÀM TỪ CHỐI BÀI ---
+  // --- HÀM TỪ CHỐI BÀI (Đã thêm thông báo) ---
   Future<void> rejectPost(Map<String, dynamic> post, String adminId, String reason) async {
     String postId = post['id'];
     String sellerId = post['sellerId'];
     String category = post['category'] ?? 'Khác';
+    String postTitle = post['title'] ?? "Bài đăng";
     
     Map<String, dynamic> updateData = {};
 
@@ -53,21 +66,30 @@ class AdminService {
       'rejectedAt': ServerValue.timestamp,
     };
 
-    // 1. Cập nhật trạng thái trong node posts để admin/user vẫn thấy bài gốc
+    // 1. Cập nhật trạng thái trong node posts
     updateData["posts/$postId"] = refusedPost;
 
-    // 2. Lưu vào kho đồ người dùng (mục bị từ chối) theo danh mục
+    // 2. Lưu vào kho đồ người dùng
     updateData["user_posts/$sellerId/$category/$postId"] = refusedPost;
 
-    // 3. Lưu log Admin: admin_logs/Refuse/tên danh mục/id bài đăng
+    // 3. Lưu log Admin
     updateData["admin_logs/$adminId/Refuse/$category/$postId"] = ServerValue.timestamp;
+
+    // --- MỚI: GỬI THÔNG BÁO CHO USER ---
+    String notifId = _dbRef.child("notifications/$sellerId").push().key ?? postId;
+    updateData["notifications/$sellerId/$notifId"] = {
+      "type": "post_refused",
+      "title": "Từ chối bài đăng",
+      "content": "Bài đăng '$postTitle' bị từ chối. Lý do: $reason",
+      "timestamp": ServerValue.timestamp,
+      "isRead": false,
+      "tabIndex": 2 // Tab "Bị từ chối" trong ManagePostsScreen
+    };
 
     await _dbRef.update(updateData);
   }
 
-  // Hàm lấy Log Admin phân cấp theo tab
   Stream<DatabaseEvent> getAdminLogStream(String adminId, String logType) {
-    // logType: "Approved" hoặc "Refuse"
     return _dbRef.child("admin_logs").child(adminId).child(logType).onValue;
   }
 }

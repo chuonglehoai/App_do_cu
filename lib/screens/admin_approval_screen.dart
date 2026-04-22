@@ -1,9 +1,10 @@
+import 'package:app_do_cu/screens/AdminSettingsScreen.dart' show AdminSettingsScreen;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:provider/provider.dart';
 import '../UserProvider.dart';
-import '../services/admin_service.dart';
+import '../services/admin_service.dart'; // Đảm bảo bạn đã tạo và import file này
 
 class AdminApprovalScreen extends StatefulWidget {
   const AdminApprovalScreen({super.key});
@@ -20,6 +21,7 @@ class _AdminApprovalScreenState extends State<AdminApprovalScreen> {
 
   final AdminService _adminService = AdminService();
   int _currentTabIndex = 0; // 0: Chờ duyệt, 1: Đã duyệt, 2: Bị từ chối
+  int _bottomNavIndex = 0; // 0: Duyệt tin, 1: Cài đặt
 
   // Hàm hiển thị hộp thoại từ chối với lý do
   void _showRejectDialog(Map<String, dynamic> postData) {
@@ -38,7 +40,6 @@ class _AdminApprovalScreenState extends State<AdminApprovalScreen> {
             onPressed: () async {
               if (reasonController.text.trim().isNotEmpty) {
                 final String adminId = context.read<UserProvider>().userId ?? "";
-                // Thực hiện từ chối bài và ghi log phân cấp
                 await _adminService.rejectPost(postData, adminId, reasonController.text.trim());
                 if (mounted) Navigator.pop(context);
               }
@@ -50,13 +51,11 @@ class _AdminApprovalScreenState extends State<AdminApprovalScreen> {
     );
   }
 
-  // Hàm tìm kiếm chi tiết bài đăng từ ID trong các node khác nhau
+  // Truy vấn chi tiết bài đăng
   Future<Map<String, dynamic>?> _getPostDetailById(String postId) async {
-    // 1. Tìm trong posts (cho tin chờ duyệt hoặc mới bị từ chối)
     final postSnap = await FirebaseDatabase.instance.ref("posts/$postId").get();
     if (postSnap.exists) return Map<String, dynamic>.from(postSnap.value as Map);
 
-    // 2. Tìm trong posted (duyệt qua các danh mục)
     final postedSnap = await FirebaseDatabase.instance.ref("posted").get();
     if (postedSnap.exists) {
       Map<dynamic, dynamic> categories = postedSnap.value as Map;
@@ -71,26 +70,33 @@ class _AdminApprovalScreenState extends State<AdminApprovalScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final String adminId = context.read<UserProvider>().userId ?? "";
-
     return Scaffold(
       backgroundColor: backgroundLight,
-      appBar: _buildHeader(),
-      body: Column(
-        children: [
-          _buildFilterTabs(),
-          Expanded(
-            child: _currentTabIndex == 0 
-              ? _buildPendingList() 
-              : _buildLogList(adminId),
-          ),
-        ],
-      ),
+      // Nếu ở tab Duyệt tin thì hiện Header cũ, nếu ở Cài đặt thì Header do màn hình đó quản lý
+      appBar: _bottomNavIndex == 0 ? _buildHeader() : null,
+      body: _bottomNavIndex == 0 
+          ? _buildMainAdminBody() 
+          : const AdminSettingsScreen(),
       bottomNavigationBar: _buildBottomNav(),
     );
   }
 
-  // --- TAB 1: DANH SÁCH CHỜ DUYỆT (Realtime) ---
+  // --- NỘI DUNG CHÍNH CỦA TAB DUYỆT TIN ---
+  Widget _buildMainAdminBody() {
+    final String adminId = context.read<UserProvider>().userId ?? "";
+    return Column(
+      children: [
+        _buildFilterTabs(),
+        Expanded(
+          child: _currentTabIndex == 0 
+            ? _buildPendingList() 
+            : _buildLogList(adminId),
+        ),
+      ],
+    );
+  }
+
+  // --- TAB 1: DANH SÁCH CHỜ DUYỆT ---
   Widget _buildPendingList() {
     return StreamBuilder<DatabaseEvent>(
       stream: _adminService.getPendingPostsStream(),
@@ -107,7 +113,6 @@ class _AdminApprovalScreenState extends State<AdminApprovalScreen> {
             }
           });
         }
-
         if (posts.isEmpty) return const Center(child: Text("Không có tin nào đang chờ duyệt"));
 
         return ListView.builder(
@@ -119,20 +124,17 @@ class _AdminApprovalScreenState extends State<AdminApprovalScreen> {
     );
   }
 
-  // --- TAB 2 & 3: LỊCH SỬ DUYỆT (Lấy ID từ admin_logs -> Truy chi tiết) ---
+  // --- TAB 2 & 3: LỊCH SỬ DUYỆT ---
   Widget _buildLogList(String adminId) {
     String logType = _currentTabIndex == 1 ? "Approved" : "Refuse";
-    
     return StreamBuilder<DatabaseEvent>(
       stream: _adminService.getAdminLogStream(adminId, logType),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-        
         if (!snapshot.hasData || snapshot.data!.snapshot.value == null) {
-          return Center(child: Text("Bạn chưa có bài nào ở mục $logType"));
+          return Center(child: Text("Bạn chưa xử lý bài nào ở mục này"));
         }
 
-        // Duyệt log phân cấp: admin_logs -> AdminID -> Approved/Refuse -> Category -> PostID
         Map<dynamic, dynamic> categoriesLog = Map<dynamic, dynamic>.from(snapshot.data!.snapshot.value as Map);
         List<String> postIds = [];
         categoriesLog.forEach((cat, posts) {
@@ -156,7 +158,7 @@ class _AdminApprovalScreenState extends State<AdminApprovalScreen> {
     );
   }
 
-  // --- WIDGET GIAO DIỆN CARD BÀI ĐĂNG ---
+  // --- CARD BÀI ĐĂNG ---
   Widget _buildPostCard(Map<String, dynamic> post) {
     final String adminId = context.read<UserProvider>().userId ?? "";
     String imageUrl = (post['images'] != null && (post['images'] as List).isNotEmpty) 
@@ -189,8 +191,8 @@ class _AdminApprovalScreenState extends State<AdminApprovalScreen> {
                   ],
                 ),
                 const SizedBox(height: 8),
-                Text(post['title'] ?? "", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                Text("${post['price']}đ", style: TextStyle(fontSize: 16, color: primaryColor, fontWeight: FontWeight.bold)),
+                Text(post['title'] ?? "", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                Text("${post['price']}đ", style: TextStyle(fontSize: 14, color: primaryColor, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
                 Text(post['description'] ?? "", maxLines: 2, style: TextStyle(color: greyText, fontSize: 13)),
                 
@@ -227,11 +229,10 @@ class _AdminApprovalScreenState extends State<AdminApprovalScreen> {
     );
   }
 
-  // --- CÁC WIDGET GIAO DIỆN PHỤ (Header, Tabs, Nav) ---
   PreferredSizeWidget _buildHeader() {
     return AppBar(
       backgroundColor: Colors.white,
-      elevation: 0,
+      elevation: 0.5,
       centerTitle: true,
       title: Column(
         children: [
@@ -265,7 +266,7 @@ class _AdminApprovalScreenState extends State<AdminApprovalScreen> {
           alignment: Alignment.center,
           padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(border: Border(bottom: BorderSide(color: isActive ? primaryColor : Colors.transparent, width: 3))),
-          child: Text(label, style: GoogleFonts.beVietnamPro(color: isActive ? primaryColor : greyText, fontSize: 14, fontWeight: isActive ? FontWeight.bold : FontWeight.w500)),
+          child: Text(label, style: GoogleFonts.beVietnamPro(color: isActive ? primaryColor : greyText, fontSize: 13, fontWeight: isActive ? FontWeight.bold : FontWeight.w500)),
         ),
       ),
     );
@@ -275,11 +276,10 @@ class _AdminApprovalScreenState extends State<AdminApprovalScreen> {
     return BottomNavigationBar(
       type: BottomNavigationBarType.fixed,
       selectedItemColor: primaryColor,
-      currentIndex: 0,
+      currentIndex: _bottomNavIndex,
+      onTap: (index) => setState(() => _bottomNavIndex = index),
       items: const [
         BottomNavigationBarItem(icon: Icon(Icons.fact_check), label: "Duyệt tin"),
-        BottomNavigationBarItem(icon: Icon(Icons.analytics_outlined), label: "Thống kê"),
-        BottomNavigationBarItem(icon: Icon(Icons.group_outlined), label: "Thành viên"),
         BottomNavigationBarItem(icon: Icon(Icons.settings_outlined), label: "Cài đặt"),
       ],
     );

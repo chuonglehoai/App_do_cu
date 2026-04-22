@@ -33,13 +33,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _loadData() async {
-  final userId = context.read<UserProvider>().userId;
-  final data = await _dbService.getUserData(userId!);
-  setState(() {
-    userData = data ?? {};
-    _isLoading = false;
-  });
-}
+    final userId = context.read<UserProvider>().userId;
+    
+    // Kiểm tra an toàn trước khi gọi Database
+    if (userId == null || userId.isEmpty) {
+      setState(() => _isLoading = false);
+      return;
+    }
+
+    final data = await _dbService.getUserData(userId);
+    if (mounted) {
+      setState(() {
+        userData = data ?? {}; // Nếu data null thì gán Map rỗng
+        _isLoading = false;
+      });
+    }
+  }
+  
   Future<void> _handleUpdateAvatar() async {
     setState(() => _isLoading = true);
   final userId = context.read<UserProvider>().userId;
@@ -210,15 +220,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ],
         ),
         const SizedBox(height: 16),
-        Text(userData['fullName'] ?? 'Chưa cập nhật', style: GoogleFonts.beVietnamPro(fontSize: 24, fontWeight: FontWeight.bold)),
-        Text('MSSV: ${userData['studentId'] ?? 'N/A'}', style: const TextStyle(color: Colors.grey)),
+        // PHÒNG THỦ: Thêm giá trị mặc định cho tất cả các trường
+        Text(userData['fullName'] ?? 'Chưa cập nhật tên', style: GoogleFonts.beVietnamPro(fontSize: 24, fontWeight: FontWeight.bold)),
+        Text('MSSV: ${userData['studentId'] ?? 'Chưa có MSSV'}', style: const TextStyle(color: Colors.grey)),
         const SizedBox(height: 4),
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             const Icon(Icons.school, size: 16, color: Colors.grey),
             const SizedBox(width: 4),
-            Text(userData['address'] ?? 'Đại học Bách Khoa TP.HCM', style: GoogleFonts.beVietnamPro(color: Colors.grey)),
+            Text(userData['school'] ?? userData['address'] ?? 'Chưa cập nhật trường', style: GoogleFonts.beVietnamPro(color: Colors.grey)),
           ],
         ),
         Row(
