@@ -1,5 +1,5 @@
 import 'package:app_do_cu/UserProvider.dart';
-import 'package:app_do_cu/screens/ManagePostsScreen.dart';
+import 'package:app_do_cu/screens/post/manage_posts_screen.dart';
 import 'package:app_do_cu/widgets/custom_bottom_nav.dart' show CustomBottomNav;
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';

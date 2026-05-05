@@ -25,4 +25,9 @@ class UserProvider with ChangeNotifier {
     _userId = null;
     notifyListeners();
   }
+  void setUserData({String? name, String? avatar}) {
+    _fullName = name;
+    _avatarUrl = avatar;
+    notifyListeners(); 
+  }
 }

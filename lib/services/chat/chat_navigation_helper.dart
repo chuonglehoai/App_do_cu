@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_database/firebase_database.dart';
-import '../models/product_model.dart';
-import '../screens/chat_detail_screen.dart';
+import '../../models/product_model.dart';
+import '../../screens/chat/chat_detail_screen.dart';
 
 class ChatNavigationHelper {
   static Future<void> handleChatNavigation({
