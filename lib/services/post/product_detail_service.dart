@@ -19,6 +19,7 @@ abstract class ProductDetailService extends State<ProductDetailScreen> {
   late PageController pageController;
   int currentPage = 0;
   final ChatService chatService = ChatService();
+  final AdminService _adminService = AdminService();
 
   @override
   void initState() {
@@ -101,84 +102,5 @@ abstract class ProductDetailService extends State<ProductDetailScreen> {
         mounted: mounted,
       );
     }
-  }
-  Future<void> handleApproveAction(Map<String, dynamic> postData) async {
-    final String adminId = context.read<UserProvider>().userId ?? "";
-    await adminService.approvePost(postData, adminId);
-    if (mounted) Navigator.pop(context); // Quay về danh sách sau khi duyệt
-  }
-  void showRejectDialog(Map<String, dynamic> postData) {
-    TextEditingController reasonController = TextEditingController();
-    
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-          top: 12, left: 20, right: 20,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10))),
-            ),
-            const SizedBox(height: 20),
-            Text("Từ chối bài đăng", style: GoogleFonts.beVietnamPro(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.red)),
-            const SizedBox(height: 8),
-            Text("Vui lòng cung cấp lý do cụ thể để người dùng có thể chỉnh sửa lại bài đăng.", style: GoogleFonts.beVietnamPro(color: const Color(0xFF6C7C7F), fontSize: 13)),
-            const SizedBox(height: 20),
-            TextField(
-              controller: reasonController,
-              maxLines: 3,
-              decoration: InputDecoration(
-                hintText: "Ví dụ: Hình ảnh mờ, giá không hợp lệ...",
-                filled: true,
-                fillColor: backgroundLight,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.red.shade200)),
-              ),
-            ),
-            const SizedBox(height: 20),
-            Row(
-              children: [
-                Expanded(
-                  child: TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: Text("Hủy", style: TextStyle(color: const Color(0xFF6C7C7F))),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  flex: 2,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      elevation: 0,
-                    ),
-                    onPressed: () async {
-                      if (reasonController.text.trim().isNotEmpty) {
-                        final String adminId = context.read<UserProvider>().userId ?? "";
-                        await adminService.rejectPost(postData, adminId, reasonController.text.trim());
-                        if (mounted) Navigator.pop(context);
-                      }
-                    },
-                    child: const Text("Xác nhận từ chối", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }
