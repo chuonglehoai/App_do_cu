@@ -1,5 +1,7 @@
+import 'package:app_do_cu/UserProvider.dart' show UserProvider;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:http/http.dart' show read;
 import '../../models/product_model.dart';
 import '../../widgets/seller_info_card.dart';
 import '../../services/post/product_detail_service.dart'; // Import controller
@@ -207,6 +209,9 @@ class _ProductDetailScreenState extends ProductDetailService {
   }
 
   Widget _buildBottomActionBar(BuildContext context, bool isAdminView) {
+    if (isAdminView) {
+      return const SizedBox.shrink(); 
+    }
     return Positioned(
       bottom: 0,
       left: 0,
@@ -217,41 +222,12 @@ class _ProductDetailScreenState extends ProductDetailService {
           color: Colors.white,
           border: Border(top: BorderSide(color: Colors.grey.shade200)),
         ),
-        child: isAdminView ? _buildAdminButtons() : _buildUserChatButton(),
+        child: _buildUserChatButton(),
       ),
     );
   }
 
-  Widget _buildAdminButtons() {
-    return Row(
-      children: [
-        Expanded(
-          child: OutlinedButton(
-            onPressed: () => showRejectDialog(widget.product.toMap()), // Hàm từ controller
-            style: OutlinedButton.styleFrom(
-              side: const BorderSide(color: Colors.red),
-              minimumSize: const Size(0, 56),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-            child: const Text("Từ chối", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          flex: 2,
-          child: ElevatedButton(
-            onPressed: () => handleApproveAction(widget.product.toMap()), // Hàm từ controller
-            style: ElevatedButton.styleFrom(
-              backgroundColor: primaryColor,
-              minimumSize: const Size(0, 56),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-            child: const Text("Duyệt tin", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-          ),
-        ),
-      ],
-    );
-  }
+  
   Widget _buildUserChatButton() {
     return ElevatedButton.icon(
       onPressed: handleChatAction,
