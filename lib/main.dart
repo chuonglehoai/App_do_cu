@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 // 1. Import file màn hình login ở đây
-import 'screens/login_screen.dart';
+import 'screens/login_and_regist/login_screen.dart';
 import 'UserProvider.dart';
 import 'package:provider/provider.dart';
 

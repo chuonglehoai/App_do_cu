@@ -1,13 +1,15 @@
 import 'package:app_do_cu/UserProvider.dart';
+import 'package:app_do_cu/screens/login_and_regist/forgot_password_screen.dart' show ForgotPasswordScreen;
+import 'package:app_do_cu/services/login_and_regist/auth_service.dart' show AuthService;
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart'; // Import Firebase Auth
 import 'package:provider/provider.dart';
 import 'register_screen.dart';
-import 'home_screen.dart'; // Import trang chủ của bạn
+import '../home_screen.dart'; // Import trang chủ của bạn
 import 'package:app_do_cu/showError.dart';
-import 'admin_approval_screen.dart';
+import '../admin/admin_approval_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -24,77 +26,37 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
 
+  final AuthService _authService = AuthService();
+
   Future<void> _login() async {
-    final email = _emailController.text.trim();
-    final password = _passwordController.text;
-
-    if (email.isEmpty || password.isEmpty) {
-      context.showError('Vui lòng nhập đầy đủ email và mật khẩu');
-      return;
-    }
-
-    setState(() => _isLoading = true);
-
-    try {
-      // 1. ĐĂNG NHẬP THÔNG QUA FIREBASE AUTH
-      UserCredential userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
-
-      String uid = userCredential.user!.uid;
-
-      // 2. KIỂM TRA TÀI KHOẢN ADMIN TRƯỚC
-      DatabaseReference adminRef = FirebaseDatabase.instance.ref("admins/$uid");
-      DataSnapshot adminSnapshot = await adminRef.get();
-
-      if (adminSnapshot.exists) {
-        // Nếu tồn tại trong node admins -> Là Admin
+    await _authService.login(
+      email: _emailController.text.trim(),
+      password: _passwordController.text,
+      context: context,
+      onLoading: (isLoading) {
+        if (mounted) setState(() => _isLoading = isLoading);
+      },
+      onError: (message) {
+        // Gọi hàm hiển thị lỗi tùy biến của bạn
+        context.showError(message); 
+      },
+      onSuccess: (role) {
         if (!mounted) return;
         
-        // Lưu UID vào Provider
-        Provider.of<UserProvider>(context, listen: false).setUserId(uid);
-
-        // Chuyển đến màn hình Admin
-        Navigator.pushReplacement(
-          context, 
-          MaterialPageRoute(builder: (context) => const AdminApprovalScreen())
-        );
-        return; // Kết thúc hàm tại đây vì đã tìm thấy Admin
-      }
-
-      // 3. NẾU KHÔNG PHẢI ADMIN, KIỂM TRA TÀI KHOẢN USER
-      DatabaseReference userRef = FirebaseDatabase.instance.ref("users/$uid");
-      DataSnapshot userSnapshot = await userRef.get();
-
-      if (userSnapshot.exists) {
-        if (!mounted) return;
-        
-        Provider.of<UserProvider>(context, listen: false).setUserId(uid);
-
-        // Chuyển đến màn hình Trang chủ User
-        Navigator.pushReplacement(
-          context, 
-          MaterialPageRoute(builder: (context) => const HomeScreen())
-        );
-      } else {
-        // Trường hợp login thành công Auth nhưng không tìm thấy dữ liệu trong Database
-        context.showError('Tài khoản chưa được thiết lập dữ liệu trên hệ thống.');
-      }
-
-    } on FirebaseAuthException catch (e) {
-      if (e.code == 'user-not-found') {
-        context.showError('Email này không tồn tại trong hệ thống');
-      } else if (e.code == 'wrong-password') {
-        context.showError('Mật khẩu không chính xác. Vui lòng thử lại');
-      } else {
-        context.showError('Lỗi xác thực: ${e.message}');
-      }
-    } catch (e) {
-      context.showError('Lỗi kết nối: $e');
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
+        // Điều hướng dựa trên role trả về
+        if (role == 'admin') {
+          Navigator.pushReplacement(
+            context, 
+            MaterialPageRoute(builder: (context) => const AdminApprovalScreen())
+          );
+        } else {
+          Navigator.pushReplacement(
+            context, 
+            MaterialPageRoute(builder: (context) => const HomeScreen())
+          );
+        }
+      },
+    );
   }
 
   @override
@@ -153,8 +115,22 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
                       
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 8),
                       
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          TextButton(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(builder: (context) => const ForgotPasswordScreen()),
+                              );
+                            },
+                            child: const Text('Quên mật khẩu?', style: TextStyle(color: Color(0xFF137FEC))),
+                          ),
+                        ],
+                      ),
                       SizedBox(
                         width: double.infinity,
                         height: 56,

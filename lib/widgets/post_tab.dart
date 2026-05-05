@@ -1,6 +1,7 @@
 import 'package:app_do_cu/models/product_model.dart' show Product;
-import 'package:app_do_cu/screens/add_post_screen.dart' show AddPostScreen;
-import 'package:firebase_database/firebase_database.dart' show DatabaseEvent, FirebaseDatabase, DatabaseReference;
+import 'package:app_do_cu/screens/post/add_post_screen.dart' show AddPostScreen;
+import 'package:firebase_database/firebase_database.dart' show DatabaseEvent, FirebaseDatabase, DatabaseReference, Transaction;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' show StatefulWidget, AutomaticKeepAliveClientMixin, State, BuildContext, Widget, Center, EdgeInsets, Text, ConnectionState, CircularProgressIndicator, ListView, StreamBuilder, Container, SizedBox, TextStyle, Divider, Colors, BorderRadius, BoxShadow, BoxDecoration, CrossAxisAlignment, Image, BoxFit, ClipRRect, FontWeight, Color, Column, Expanded, Row, showDialog, SnackBar, Navigator, TextButton, AlertDialog, ScaffoldMessenger, IconButton, Icon, Icons, InkWell, BoxConstraints, MaterialPageRoute, TextOverflow;
 
 class PostTabContent extends StatefulWidget {
@@ -26,43 +27,72 @@ class _PostTabContentState extends State<PostTabContent> with AutomaticKeepAlive
   
   @override
   bool get wantKeepAlive => true; // Trả về true để giữ trạng thái
-  final DatabaseReference _postRef = FirebaseDatabase.instance.ref("posts");
   final DatabaseReference _dbRef = FirebaseDatabase.instance.ref(); // Tham chiếu gốc
 
-  Future<void> _deletePost(String postId, bool isPostedNode) async {
-    // Hiển thị hộp thoại xác nhận (giữ nguyên logic của bạn)
+  Future<void> _deletePost(String postId, bool isPostedNode, Map<String, dynamic> postData) async {
+    // 1. Xác nhận xóa
     bool confirm = await showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text("Xác nhận xóa"),
-        content: const Text("Bạn có chắc chắn muốn xóa bài đăng này không?"),
+        content: const Text("Bạn có chắc chắn muốn xóa bài đăng này không? Dữ liệu sẽ không thể khôi phục."),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Hủy")),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text("Xóa", style: TextStyle(color: Colors.red))),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true), 
+            child: const Text("Xóa", style: TextStyle(color: Colors.red))
+          ),
         ],
       ),
     ) ?? false;
 
-    if (confirm) {
-      try {
-        if (isPostedNode) {
-          // Duyệt tìm và xóa trong node 'posted' (đúng cấu trúc category của bạn)
-          final snapshot = await _dbRef.child("posted").get();
-          if (snapshot.exists) {
-            Map data = snapshot.value as Map;
-            data.forEach((cat, posts) {
-              if (posts is Map && posts.containsKey(postId)) {
-                _dbRef.child("posted/$cat/$postId").remove(); // Xóa đúng node
-              }
-            });
+    if (!confirm) return;
+
+    try {
+      // Lấy thông tin cần thiết từ postData truyền vào
+      String sellerId = postData['sellerId'] ?? "";
+      String category = postData['category'] ?? "Khác";
+      String status = postData['status'] ?? "";
+
+      Map<String, dynamic> updates = {};
+
+      // 2. Xóa tại node chính (posts hoặc posted)
+      if (isPostedNode) {
+        // Vì node 'posted' phân cấp theo Category nên xóa trực tiếp nếu đã biết Category
+        updates["posted/$category/$postId"] = null;
+      } else {
+        // Node 'posts' của bạn lưu phẳng hoặc theo cấu trúc riêng
+        updates["posts/$category/$postId"] = null;
+      }
+
+      // 3. Xóa tại node 'user_posts' (Cấu trúc: user_posts/uid/category/postId)
+      updates["user_posts/$sellerId/$category/$postId"] = null;
+
+      // THỰC HIỆN XÓA ĐỒNG LOẠT
+      await _dbRef.update(updates);
+
+      // 4. CẬP NHẬT BIẾN ĐẾM (Nếu bài bị xóa là bài đang bị từ chối)
+      if (status == 'refused' && sellerId.isNotEmpty) {
+        DatabaseReference countRef = FirebaseDatabase.instance.ref("users/$sellerId/rejectedCount");
+        await countRef.runTransaction((Object? postCount) {
+          if (postCount == null || (postCount as int) <= 0) {
+            return Transaction.success(0);
           }
-        } else {
-          // Xóa trong node 'posts'
-          await _dbRef.child("posts/$postId").remove(); 
-        }
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Đã xóa bài đăng thành công")));
-      } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Lỗi khi xóa bài")));
+          return Transaction.success((postCount as int) - 1);
+        });
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Đã xóa bài đăng và cập nhật thống kê thành công"))
+        );
+      }
+    } catch (e) {
+      debugPrint("Lỗi xóa bài: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Lỗi khi xóa bài. Vui lòng thử lại."))
+        );
       }
     }
   }
@@ -132,6 +162,7 @@ class _PostTabContentState extends State<PostTabContent> with AutomaticKeepAlive
                 );
               },
               child: _buildPostCard(
+                postFullData: post,
                 postId: post['id'],
                 title: post['title'] ?? "Không tiêu đề",
                 price: "${post['price'] ?? 0}đ",
@@ -149,6 +180,7 @@ class _PostTabContentState extends State<PostTabContent> with AutomaticKeepAlive
   }
 
   Widget _buildPostCard({
+    required Map<String, dynamic> postFullData,
     required String postId,
     required String title,
     required String price,
@@ -201,7 +233,7 @@ class _PostTabContentState extends State<PostTabContent> with AutomaticKeepAlive
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
                 icon: const Icon(Icons.delete_outline, color: Colors.red, size: 22),
-                onPressed: () => _deletePost(postId, widget.isPostedNode),
+                onPressed: () => _deletePost(postId, widget.isPostedNode,postFullData),
               ),
             ],
           ),

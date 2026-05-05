@@ -1,12 +1,12 @@
 import 'package:app_do_cu/UserProvider.dart';
-import 'package:app_do_cu/screens/NotificationScreen.dart' show NotificationScreen;
+import 'package:app_do_cu/screens/notification_screen.dart' show NotificationScreen;
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../screens/home_screen.dart';
-import '../screens/ManagePostsScreen.dart';
-import '../screens/ProfileScreen.dart';
-import '../screens/chat_list_screen.dart';
+import '../screens/post/manage_posts_screen.dart';
+import '../screens/profile_screen.dart';
+import '../screens/chat/chat_list_screen.dart';
 
 class CustomBottomNav extends StatelessWidget {
   final int currentIndex;

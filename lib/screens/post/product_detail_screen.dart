@@ -1,55 +1,19 @@
-import 'package:app_do_cu/UserProvider.dart' show UserProvider;
-import 'package:app_do_cu/services/chat_navigation_helper.dart' show ChatNavigationHelper;
-import 'package:app_do_cu/services/chat_service.dart' show ChatService;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:app_do_cu/models/product_model.dart';
-import 'package:http/http.dart' show read;
-import 'package:provider/provider.dart' show ReadContext;
-import '../widgets/seller_info_card.dart';
-import 'chat_list_screen.dart';
-import '../widgets/full_screen_image_viewer.dart';
+import '../../models/product_model.dart';
+import '../../widgets/seller_info_card.dart';
+import '../../services/post/product_detail_service.dart'; // Import controller
 
 class ProductDetailScreen extends StatefulWidget {
   final Product product;
-
-  const ProductDetailScreen({super.key, required this.product});
+  final bool isAdminView;
+  const ProductDetailScreen({super.key, required this.product,this.isAdminView = false,});
 
   @override
   State<ProductDetailScreen> createState() => _ProductDetailScreenState();
 }
 
-class _ProductDetailScreenState extends State<ProductDetailScreen> {
-  final Color primaryColor = const Color(0xFF3E8B98);
-  final Color backgroundLight = const Color(0xFFF6F7F7);
-  
-  // Controller để điều khiển việc chuyển ảnh
-  late PageController _pageController;
-  int _currentPage = 0;
-
-  
-
-  @override
-  void initState() {
-    super.initState();
-    _pageController = PageController();
-  }
-
-  @override
-  void dispose() {
-    _pageController.dispose();
-    super.dispose();
-  }
-
-  // Hàm mở xem ảnh toàn màn hình và phóng to
-  void _openFullScreenImage(int initialIndex) {
-    FullScreenImageViewer.open(
-      context, 
-      widget.product.images, 
-      index: initialIndex
-    );
-  }
-
+class _ProductDetailScreenState extends ProductDetailService {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -72,13 +36,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               ],
             ),
           ),
-          _buildBottomActionBar(context),
+          _buildBottomActionBar(context, widget.isAdminView),
         ],
       ),
     );
   }
 
-  // --- 1. Header Hình ảnh với PageView ---
   Widget _buildImageHeader(BuildContext context, List<String> images) {
     return Stack(
       children: [
@@ -87,14 +50,14 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           width: double.infinity,
           child: images.isNotEmpty
               ? PageView.builder(
-                  controller: _pageController,
+                  controller: pageController,
                   onPageChanged: (index) {
-                    setState(() => _currentPage = index);
+                    setState(() => currentPage = index);
                   },
                   itemCount: images.length,
                   itemBuilder: (context, index) {
                     return GestureDetector(
-                      onTap: () => _openFullScreenImage(index),
+                      onTap: () => openFullScreenImage(index),
                       child: Image.network(
                         images[index],
                         fit: BoxFit.cover,
@@ -104,7 +67,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                 )
               : Image.network("https://via.placeholder.com/400x400", fit: BoxFit.cover),
         ),
-        // Gradient phủ lên ảnh
         IgnorePointer(
           child: Container(
             height: 400,
@@ -117,7 +79,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             ),
           ),
         ),
-        // Nút Back
         SafeArea(
           child: Padding(
             padding: const EdgeInsets.all(8.0),
@@ -130,7 +91,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             ),
           ),
         ),
-        // Chỉ số trang (Index)
         Positioned(
           bottom: 20,
           right: 16,
@@ -141,7 +101,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               borderRadius: BorderRadius.circular(20),
             ),
             child: Text(
-              "${_currentPage + 1}/${images.length}",
+              "${currentPage + 1}/${images.length}",
               style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
             ),
           ),
@@ -150,7 +110,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     );
   }
 
-  // --- Các Widget thông tin giữ nguyên logic cũ ---
   Widget _buildProductInfo(String title, String price, String category) {
     final double numericPrice = double.tryParse(price) ?? 0;
     final bool isFree = numericPrice == 0;
@@ -247,10 +206,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     );
   }
 
-  Widget _buildBottomActionBar(BuildContext context) {
-    final userProvider = context.read<UserProvider>();
-    final ChatService _chatService = ChatService();
-
+  Widget _buildBottomActionBar(BuildContext context, bool isAdminView) {
     return Positioned(
       bottom: 0,
       left: 0,
@@ -261,62 +217,50 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           color: Colors.white,
           border: Border(top: BorderSide(color: Colors.grey.shade200)),
         ),
-        child: Row(
-          children: [
-            Expanded(
-              child: ElevatedButton.icon(
-                onPressed: () async {
-                  // 1. Chuẩn bị dữ liệu phòng chat
-                  List<String> ids = [userProvider.userId!, widget.product.sellerId];
-                  ids.sort();
-                  String chatRoomId = ids.join("_");
+        child: isAdminView ? _buildAdminButtons() : _buildUserChatButton(),
+      ),
+    );
+  }
 
-                  // 2. Gửi tin nhắn văn bản đầu tiên
-                  String productText = "Xin chào, mình muốn trao đổi về sản phẩm: ${widget.product.title}";
-                  await _chatService.sendMessage(
-                    chatRoomId,
-                    userProvider.userId!,
-                    widget.product.sellerId,
-                    productText,
-                  );
-
-                  // 3. Gửi tin nhắn thứ hai chứa ảnh (nếu có)
-                  // Việc tách riêng giúp hàm _isImageUrl nhận diện đúng link ảnh
-                  if (widget.product.images.isNotEmpty) {
-                    await _chatService.sendMessage(
-                      chatRoomId,
-                      userProvider.userId!,
-                      widget.product.sellerId,
-                      widget.product.images[0], // Gửi link ảnh nguyên bản
-                    );
-                  }
-
-                  // 4. Chuyển sang màn hình chi tiết chat
-                  if (mounted) {
-                    ChatNavigationHelper.handleChatNavigation(
-                      context: context,
-                      currentUserId: userProvider.userId,
-                      product: widget.product,
-                      mounted: mounted,
-                    );
-                  }
-                },
-                icon: const Icon(Icons.chat_bubble, color: Colors.white),
-                label: const Text(
-                  "Nhắn tin trao đổi",
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: primaryColor,
-                  minimumSize: const Size(0, 56),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ),
+  Widget _buildAdminButtons() {
+    return Row(
+      children: [
+        Expanded(
+          child: OutlinedButton(
+            onPressed: () => showRejectDialog(widget.product.toMap()), // Hàm từ controller
+            style: OutlinedButton.styleFrom(
+              side: const BorderSide(color: Colors.red),
+              minimumSize: const Size(0, 56),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
-          ],
+            child: const Text("Từ chối", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+          ),
         ),
+        const SizedBox(width: 12),
+        Expanded(
+          flex: 2,
+          child: ElevatedButton(
+            onPressed: () => handleApproveAction(widget.product.toMap()), // Hàm từ controller
+            style: ElevatedButton.styleFrom(
+              backgroundColor: primaryColor,
+              minimumSize: const Size(0, 56),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text("Duyệt tin", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ),
+      ],
+    );
+  }
+  Widget _buildUserChatButton() {
+    return ElevatedButton.icon(
+      onPressed: handleChatAction,
+      icon: const Icon(Icons.chat_bubble, color: Colors.white),
+      label: const Text("Nhắn tin trao đổi", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: primaryColor,
+        minimumSize: const Size(0, 56),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     );
   }

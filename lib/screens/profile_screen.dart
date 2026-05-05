@@ -1,6 +1,6 @@
-import 'dart:io';
 
 import 'package:app_do_cu/UserProvider.dart';
+import 'package:app_do_cu/screens/post/manage_posts_screen.dart';
 import 'package:app_do_cu/widgets/custom_bottom_nav.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -8,7 +8,7 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:provider/provider.dart';
 import 'package:app_do_cu/services/database_profile.dart';
 import 'package:app_do_cu/showError.dart';
-import 'package:app_do_cu/services/cloudinary_service.dart';
+import '../services/profile_service.dart'; // Import file controller
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -17,127 +17,7 @@ class ProfileScreen extends StatefulWidget {
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-class _ProfileScreenState extends State<ProfileScreen> {
-  final DatabaseService _dbService = DatabaseService();
-  
-  String? _uploadedUrl;
-  final CloudinaryService _imageService = CloudinaryService();
-  // Biến lưu trữ thông tin người dùng
-  Map<dynamic, dynamic> userData = {};
-  bool _isLoading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadData();
-  }
-
-  Future<void> _loadData() async {
-    final userId = context.read<UserProvider>().userId;
-    
-    // Kiểm tra an toàn trước khi gọi Database
-    if (userId == null || userId.isEmpty) {
-      setState(() => _isLoading = false);
-      return;
-    }
-
-    final data = await _dbService.getUserData(userId);
-    if (mounted) {
-      setState(() {
-        userData = data ?? {}; // Nếu data null thì gán Map rỗng
-        _isLoading = false;
-      });
-    }
-  }
-  
-  Future<void> _handleUpdateAvatar() async {
-    setState(() => _isLoading = true);
-  final userId = context.read<UserProvider>().userId;
-  File? _selectedImage;
-  String? newUrl = await _dbService.uploadAndSaveAvatar(userId!); 
-  
-  if (newUrl != null) {
-    await _loadData(); // Tải lại UI sau khi thành công
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Cập nhật thành công!"), backgroundColor: Colors.green),
-    );
-  }
-  
-  setState(() => _isLoading = false);
-  }
-
-
-  // --- Hàm Đăng xuất ---
-  Future<void> _handleLogout() async {
-    Provider.of<UserProvider>(context, listen: false).setUserId("");
-    if (!mounted) return;
-    Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
-  }
-
-  // --- Popup Cập nhật thông tin ---
-  void _showUpdateDialog() {
-    final nameController = TextEditingController(text: userData['fullName']);
-    final phoneController = TextEditingController(text: userData['phone'] ?? '');
-    final addressController = TextEditingController(text: userData['address'] ?? '');
-    final studentIdController = TextEditingController(text: userData['studentId'] ?? '');
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Cập nhật thông tin'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Họ và tên')),
-              TextField(controller: studentIdController, decoration: const InputDecoration(labelText: 'Mã số sinh viên')),
-              TextField(controller: phoneController, decoration: const InputDecoration(labelText: 'Số điện thoại')),
-              TextField(controller: addressController, decoration: const InputDecoration(labelText: 'Địa chỉ/Trường')),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Hủy')),
-          // Trong _showUpdateDialog...
-          ElevatedButton(
-            onPressed: () async {
-              // 1. Lấy userId từ Provider
-              final userId = Provider.of<UserProvider>(context, listen: false).userId;
-              
-              if (userId != null) {
-                // 2. Gọi hàm cập nhật từ file bên ngoài
-                // Giả sử hàm của bạn nằm trong class DatabaseService
-                bool success = await DatabaseService().updateStudentInfo(
-                  uid: userId,
-                  fullName: nameController.text.trim(),
-                  phone: phoneController.text.trim(),
-                  studentId: studentIdController.text.trim(),
-                  school: addressController.text.trim(),
-                );
-
-                if (success) {
-                  if (!mounted) return;
-                  Navigator.pop(context); // Đóng Dialog
-                  
-                  // 3. Quan trọng: Gọi lại hàm fetch để cập nhật giao diện Profile
-                  _loadData(); 
-                  
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text("Cập nhật thành công!"), backgroundColor: Colors.green),
-                  );
-                } else {
-                  // Xử lý khi có lỗi kết nối hoặc Firebase từ chối
-                  context.showError("Cập nhật thất bại!");
-                }
-              }
-            },
-            child: const Text('Lưu'),
-          ),
-        ],
-      ),
-    );
-  }
-
+class _ProfileScreenState extends ProfileService {
   @override
   Widget build(BuildContext context) {
     const Color primaryColor = Color(0xFF3E8B98);
@@ -151,7 +31,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         elevation: 0,
         title: Text('Thông tin cá nhân', style: GoogleFonts.beVietnamPro(fontSize: 18, fontWeight: FontWeight.bold)),
       ),
-      body: _isLoading 
+      body: isLoading 
         ? const Center(child: CircularProgressIndicator()) 
         : SingleChildScrollView(
             child: Column(
@@ -163,9 +43,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 const SizedBox(height: 24),
                 _buildSectionHeader('Quản lý hoạt động'),
                 _buildActionGroup([
-                  _buildListItem(icon: Icons.grid_view, label: 'Bài đăng của tôi', iconColor: primaryColor, bgColor: primaryColor.withOpacity(0.1)),
-                  _buildListItem(icon: Icons.favorite, label: 'Sản phẩm yêu thích', iconColor: Colors.pink, bgColor: Colors.pink.withOpacity(0.1)),
-                ]),
+                    _buildListItem(
+                      icon: Icons.grid_view, 
+                      label: 'Bài đăng của tôi', 
+                      iconColor: primaryColor, 
+                      bgColor: primaryColor.withOpacity(0.1),
+                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ManagePostsScreen(initialTabIndex: 1))),
+                    )
+                  ]
+                ),
                 const SizedBox(height: 24),
                 _buildSectionHeader('Cài đặt'),
                 _buildActionGroup([
@@ -174,7 +60,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     label: 'Chỉnh sửa thông tin', 
                     iconColor: Colors.blue, 
                     bgColor: Colors.blue.withOpacity(0.1),
-                    onTap: _showUpdateDialog,
+                    onTap: showUpdateDialog,
                   ),
                   _buildListItem(
                     icon: Icons.logout, 
@@ -182,7 +68,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     iconColor: Colors.red, 
                     bgColor: Colors.red.withOpacity(0.1), 
                     isLogout: true,
-                    onTap: _handleLogout,
+                    onTap: handleLogout,
                   ),
                 ]),
                 const SizedBox(height: 40),
@@ -199,18 +85,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
         Stack(
           alignment: Alignment.bottomRight,
           children: [
-            Container(
-              width: 128, height: 128,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                image: DecorationImage(
-                  image: NetworkImage(userData['avatar']),
-                  fit: BoxFit.cover,
-                ),
-              ),
+            CircleAvatar(
+              radius: 50,
+              backgroundImage: (userData['avatarUrl'] != null && userData['avatarUrl'].isNotEmpty)
+                  ? NetworkImage(userData['avatarUrl'])
+                  : const AssetImage('assets/default_avatar.png') as ImageProvider,
             ),
             IconButton(
-              onPressed: _handleUpdateAvatar,
+              onPressed: handleUpdateAvatar,
               icon: Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(color: primaryColor, shape: BoxShape.circle),
@@ -220,7 +102,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ],
         ),
         const SizedBox(height: 16),
-        // PHÒNG THỦ: Thêm giá trị mặc định cho tất cả các trường
         Text(userData['fullName'] ?? 'Chưa cập nhật tên', style: GoogleFonts.beVietnamPro(fontSize: 24, fontWeight: FontWeight.bold)),
         Text('MSSV: ${userData['studentId'] ?? 'Chưa có MSSV'}', style: const TextStyle(color: Colors.grey)),
         const SizedBox(height: 4),
@@ -244,7 +125,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // --- Widget: Warning Panel ---
   Widget _buildWarningPanel(Color warningGold, Color primaryColor) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -271,21 +151,40 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text('Tình trạng tài khoản', style: TextStyle(color: Colors.grey, fontSize: 14)),
-                  Text.rich(
-                    TextSpan(
-                      text: 'Số lần cảnh cáo: ',
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-                      children: [TextSpan(text: '0', style: TextStyle(color: warningGold))],
-                    ),
+                  StreamBuilder<DatabaseEvent>(
+                    stream: FirebaseDatabase.instance.ref("users/${context.read<UserProvider>().userId}/rejectedCount").onValue,
+                    builder: (context, snapshot) {
+                      int count = 0;
+                      if (snapshot.hasData && snapshot.data!.snapshot.value != null) {
+                        count = int.parse(snapshot.data!.snapshot.value.toString());
+                      }
+                      return Text.rich(
+                        TextSpan(
+                          text: 'Số bài đăng bị từ chối: ',
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                          children: [
+                            TextSpan(text: '$count', style: TextStyle(color: warningGold)),
+                          ],
+                        ),
+                      );
+                    },
                   ),
                 ],
               ),
             ),
-            Row(
-              children: [
-                Text('Chi tiết', style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold, fontSize: 14)),
-                Icon(Icons.arrow_forward, color: primaryColor, size: 14),
-              ],
+            InkWell(
+              onTap: () => Navigator.push(
+                context, 
+                MaterialPageRoute(builder: (context) => const ManagePostsScreen(initialTabIndex: 2))
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('Chi tiết', style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold, fontSize: 14)),
+                  const SizedBox(width: 4),
+                  Icon(Icons.arrow_forward, color: primaryColor, size: 14),
+                ],
+              ),
             ),
           ],
         ),
@@ -293,7 +192,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // --- Widget: Section Header ---
   Widget _buildSectionHeader(String title) {
     return Align(
       alignment: Alignment.centerLeft,
@@ -307,7 +205,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // --- Widget: List Group Container ---
   Widget _buildActionGroup(List<Widget> children) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -322,7 +219,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
   
-  // --- Widget: List Item ---
   Widget _buildListItem({required IconData icon, required String label, required Color iconColor, required Color bgColor, bool isLogout = false, VoidCallback? onTap}) {
     return Column(
       children: [
@@ -336,5 +232,4 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ],
     );
   }
-  
 }

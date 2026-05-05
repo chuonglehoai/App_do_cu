@@ -1,4 +1,5 @@
 import 'package:firebase_database/firebase_database.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
 
 class AdminService {
   final DatabaseReference _dbRef = FirebaseDatabase.instance.ref();
@@ -49,44 +50,64 @@ class AdminService {
     await _dbRef.update(updateData);
   }
 
-  // --- HÀM TỪ CHỐI BÀI (Đã thêm thông báo) ---
   Future<void> rejectPost(Map<String, dynamic> post, String adminId, String reason) async {
-    String postId = post['id'];
-    String sellerId = post['sellerId'];
+    // Đảm bảo lấy đúng ID, nếu không có thì dừng lại để tránh crash
+    String? postId = post['id'];
+    String? sellerId = post['sellerId'];
+    
+    if (postId == null || sellerId == null) {
+      debugPrint("Lỗi: Không tìm thấy ID bài viết hoặc người bán");
+      return;
+    }
+
     String category = post['category'] ?? 'Khác';
     String postTitle = post['title'] ?? "Bài đăng";
-    
+    String finalReason = reason.trim().isEmpty ? "Không có lý do cụ thể" : reason.trim();
+
     Map<String, dynamic> updateData = {};
 
     Map<String, dynamic> refusedPost = {
       ...post,
       'status': 'refused',
-      'rejectReason': reason,
+      'rejectReason': finalReason,
       'rejectedBy': adminId,
       'rejectedAt': ServerValue.timestamp,
     };
 
-    // 1. Cập nhật trạng thái trong node posts
+    // Sử dụng đường dẫn an toàn
     updateData["posts/$postId"] = refusedPost;
-
-    // 2. Lưu vào kho đồ người dùng
     updateData["user_posts/$sellerId/$category/$postId"] = refusedPost;
-
-    // 3. Lưu log Admin
     updateData["admin_logs/$adminId/Refuse/$category/$postId"] = ServerValue.timestamp;
 
-    // --- MỚI: GỬI THÔNG BÁO CHO USER ---
-    String notifId = _dbRef.child("notifications/$sellerId").push().key ?? postId;
-    updateData["notifications/$sellerId/$notifId"] = {
+    // Tạo ID thông báo an toàn
+    String notifKey = FirebaseDatabase.instance.ref().child("notifications/$sellerId").push().key ?? DateTime.now().millisecondsSinceEpoch.toString();
+    
+    updateData["notifications/$sellerId/$notifKey"] = {
       "type": "post_refused",
       "title": "Từ chối bài đăng",
-      "content": "Bài đăng '$postTitle' bị từ chối. Lý do: $reason",
+      "content": "Bài đăng '$postTitle' bị từ chối. Lý do: $finalReason",
       "timestamp": ServerValue.timestamp,
       "isRead": false,
-      "tabIndex": 2 // Tab "Bị từ chối" trong ManagePostsScreen
+      "tabIndex": 2 
     };
 
-    await _dbRef.update(updateData);
+    try {
+      // Kiểm tra dữ liệu trong console trước khi gửi
+      debugPrint("Đang cập nhật dữ liệu từ chối cho bài: $postId");
+      
+      await FirebaseDatabase.instance.ref().update(updateData);
+
+      // Tăng biến đếm
+      DatabaseReference countRef = FirebaseDatabase.instance.ref("users/$sellerId/rejectedCount");
+      await countRef.runTransaction((Object? postCount) {
+        if (postCount == null) return Transaction.success(1);
+        return Transaction.success((postCount as int) + 1);
+      });
+
+    } catch (e) {
+      debugPrint("Lỗi Firebase Update: $e");
+      rethrow;
+    }
   }
 
   Stream<DatabaseEvent> getAdminLogStream(String adminId, String logType) {

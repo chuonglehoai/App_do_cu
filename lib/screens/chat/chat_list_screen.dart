@@ -1,14 +1,11 @@
 import 'package:app_do_cu/UserProvider.dart';
-import 'package:app_do_cu/screens/chat_detail_screen.dart';
-import 'package:app_do_cu/services/chat_service.dart' show ChatService;
 import 'package:app_do_cu/widgets/custom_bottom_nav.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'dart:ui';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import '../models/product_model.dart';
+import '../../services/chat/chat_list_service.dart'; // Import controller
 
 class ChatListScreen extends StatefulWidget {
   const ChatListScreen({super.key});
@@ -17,23 +14,7 @@ class ChatListScreen extends StatefulWidget {
   State<ChatListScreen> createState() => _ChatListScreenState();
 }
 
-class _ChatListScreenState extends State<ChatListScreen> {
-  final Color primaryColor = const Color(0xFF3E8B98);
-
-  String _formatLastMessage(String msg) {
-    if (msg.contains('cloudinary.com')) return "[Hình ảnh]";
-    return msg;
-  }
-
-  String _formatTimestamp(int timestamp) {
-    var date = DateTime.fromMillisecondsSinceEpoch(timestamp);
-    var now = DateTime.now();
-    if (now.day == date.day && now.month == date.month && now.year == date.year) {
-      return DateFormat('HH:mm').format(date);
-    }
-    return DateFormat('dd/MM').format(date);
-  }
-
+class _ChatListScreenState extends ChatListService {
   @override
   Widget build(BuildContext context) {
     final String? currentUserId = context.read<UserProvider>().userId;
@@ -75,8 +56,6 @@ class _ChatListScreenState extends State<ChatListScreen> {
       ),
     );
   }
-
- 
 
   Widget _buildConversationList(String currentUserId) {
     final query = FirebaseDatabase.instance.ref("list_chat").child(currentUserId);
@@ -127,40 +106,11 @@ class _ChatListScreenState extends State<ChatListScreen> {
         }
 
         return InkWell(
-          onTap: () {
-            ChatService().resetUnreadCount(currentUserId, peerId);
-            List<String> ids = [currentUserId, peerId];
-            ids.sort();
-            String chatRoomId = ids.join("_");
-
-            Product placeholderProduct = Product(
-              id: "0",
-              title: "Sản phẩm đang thảo luận",
-              price: 0.0,
-              description: "",
-              address: "",
-              sellerId: peerId,
-              images: [],
-              category: "",
-              createdAt: "",
-            );
-
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => ChatDetailScreen(
-                  chatRoomId: chatRoomId,
-                  currentUserId: currentUserId,
-                  product: placeholderProduct,
-                ),
-              ),
-            );
-          },
+          onTap: () => navigateToChatDetail(peerId, currentUserId),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: Row(
               children: [
-                // Avatar
                 CircleAvatar(
                   radius: 28,
                   backgroundColor: primaryColor.withOpacity(0.1),
@@ -175,7 +125,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(name, style: TextStyle(fontWeight: unreadCount > 0 ? FontWeight.bold : FontWeight.w600)),
-                          Text(_formatTimestamp(chatData['timestamp']), 
+                          Text(formatTimestamp(chatData['timestamp']), 
                               style: TextStyle(color: unreadCount > 0 ? primaryColor : Colors.grey, fontSize: 12)),
                         ],
                       ),
@@ -184,17 +134,15 @@ class _ChatListScreenState extends State<ChatListScreen> {
                         children: [
                           Expanded(
                             child: Text(
-                              _formatLastMessage(chatData['lastMessage'] ?? ""),
+                              formatLastMessage(chatData['lastMessage'] ?? ""),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              // In đậm tin nhắn nếu chưa đọc
                               style: TextStyle(
                                 color: unreadCount > 0 ? Colors.black : Colors.grey[600],
                                 fontWeight: unreadCount > 0 ? FontWeight.bold : FontWeight.normal,
                               ),
                             ),
                           ),
-                          // HIỂN THỊ DẤU CHẤM THÔNG BÁO
                           if (unreadCount > 0)
                             Container(
                               padding: const EdgeInsets.all(6),

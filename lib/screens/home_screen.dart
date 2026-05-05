@@ -1,4 +1,5 @@
-import 'package:app_do_cu/screens/product_detail_screen.dart';
+import 'package:app_do_cu/screens/post/product_detail_screen.dart';
+import 'package:app_do_cu/services/database_profile.dart' show DatabaseService;
 import 'package:app_do_cu/widgets/custom_bottom_nav.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -6,13 +7,10 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:provider/provider.dart';
 
 import '../UserProvider.dart';
-import 'package:app_do_cu/models/product_model.dart'; // Đảm bảo bạn đã tạo file này
+import 'package:app_do_cu/models/product_model.dart';
 import '../widgets/search_bar_widget.dart';
 import '../widgets/category_item.dart';
 import '../widgets/product_card.dart';
-import 'ProfileScreen.dart';
-import 'ManagePostsScreen.dart';
-import 'chat_list_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -38,11 +36,30 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    _syncUserData();
+  }
+
+  Future<void> _syncUserData() async {
+    final userProvider = context.read<UserProvider>();
+    if (userProvider.userId != null) {
+      // Sử dụng DatabaseService bạn đã viết
+      final data = await DatabaseService().getUserData(userProvider.userId!);
+      if (data != null && mounted) {
+        userProvider.setUserData(
+          name: data['fullName'],
+          avatar: data['avatarUrl'],
+        );
+      }
+    }
+  }
+  @override
   Widget build(BuildContext context) {
     final userProvider = context.watch<UserProvider>();
     return Scaffold(
       backgroundColor: const Color(0xFFF6F7F7),
-      appBar: _buildHeader(userProvider),
+      appBar: _buildHeader(context),
       body: ListView(
         children: [
           Padding(
@@ -64,9 +81,13 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  PreferredSizeWidget _buildHeader(UserProvider userProvider) {
+  PreferredSizeWidget _buildHeader(BuildContext context) {
+    // Dùng watch để lắng nghe thay đổi liên tục
+    final userProvider = context.watch<UserProvider>();
+    
     String name = userProvider.fullName ?? "Người dùng";
-    bool hasAvatar = userProvider.avatarUrl != null && userProvider.avatarUrl!.isNotEmpty;
+    String? avatarUrl = userProvider.avatarUrl;
+    bool hasAvatar = avatarUrl != null && avatarUrl.isNotEmpty;
 
     return AppBar(
       backgroundColor: Colors.white.withOpacity(0.8),
@@ -77,7 +98,9 @@ class _HomeScreenState extends State<HomeScreen> {
           CircleAvatar(
             radius: 20,
             backgroundColor: const Color(0xFF3E8B98),
-            backgroundImage: hasAvatar ? NetworkImage(userProvider.avatarUrl!) : null,
+            // Sử dụng Key để Flutter biết cần tải lại ảnh khi URL thay đổi
+            key: ValueKey(avatarUrl), 
+            backgroundImage: hasAvatar ? NetworkImage(avatarUrl) : null,
             child: !hasAvatar 
                 ? Text(_getAvatarLetter(name), style: const TextStyle(color: Colors.white)) 
                 : null,
@@ -91,7 +114,8 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
     );
-  }
+}
+
 
   Widget _buildCategorySection() {
     return Column(
